@@ -1,0 +1,31 @@
+/**
+ * File:
+ *   cfg_postgresql.scr
+ * Summary:
+ *   SCR Agent for reading/writing /etc/sysconfig/postgresql
+ *   using the ini-agent
+ * Access:
+ *   read/write
+ * Authors:
+ *   Carsten Hoeger <choeger@suse.de>
+ * See:
+ *   yast2-agent-ini/ini.html
+ *   libscr
+ * Example:
+ *   Read(.sysconfig.postgresql.SOMETHING)
+ *   ("no")
+ **
+ *   Write(.sysconfig.postgresql.SOMETHING, "yes")
+ *   (true)
+ *
+ * $Id$
+ *
+ * Read/Sets the values defined in <tt>/etc/sysconfig/postgresql</tt>
+ * (formerly <tt>/etc/rc.config.d/postgresql.rc.config</tt>)
+ * in an easy manner.
+ */
+.sysconfig.postgresql
+
+`ag_ini(
+  SysConfigFile("/etc/sysconfig/postgresql")
+)

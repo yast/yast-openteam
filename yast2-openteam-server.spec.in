@@ -27,5 +27,5 @@ Summary:	Configuration of openteam
 @clientdir@/openteam_*.ycp
 @moduledir@/Openteam.ycp
 @configdir@/openteam.y2cc
-@scrconfdir@/run_ifconfig.scr
+@scrconfdir@/*.scr
 %doc @docdir@
