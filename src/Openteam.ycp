@@ -717,7 +717,7 @@ objectclass: account
     //SCR(`Write(.sysconfig.MAX_DAYS_FOR_CORE,     "1"));
     //SCR(`Write(.sysconfig.MAX_DAYS_FOR_LOGFILES, "60"));
 
-    SCR::Write(.sysconfig.security.PERMISSION_SECURITY,  "secure local");
+    SCR::Write(.sysconfig.security.PERMISSION_SECURITY,  "secure local imapweb");
     SCR::Write(.sysconfig.security, nil);
 
     SCR::Write(.sysconfig.cron.MAX_DAYS_IN_TMP,          "1");
