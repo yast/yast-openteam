@@ -385,6 +385,7 @@ Some Mailclients as Outlook Express won't be able to send mails via SSL!"));
 		  "smtpd_recipient_restrictions":"ldap:ldapmailenab,permit_tls_clientcerts,permit_sasl_authenticated,permit_mynetworks, check_relay_domains",
 		  "alias_maps":"hash:/etc/aliases,hash:/etc/aliases.d/slots,ldap:ldapaliases",
 		  "alias_database":"hash:/etc/aliases,hash:/etc/aliases.d/slots",
+          "virtual_maps":"ldap:ldapvuser,hash:/etc/postfix/virtual",
 		  "recipient_delimiter":"+",
 		  "smtpd_tls_received_header":"yes",
 		  "smtpd_tls_ask_ccert":"yes",
