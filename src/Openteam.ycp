@@ -143,6 +143,9 @@ global define boolean Read() ``{
 	    }
 	});
 	
+	EnsureTargetInit();
+	EnsureSourceInit();
+	
         if( ! AreAllPackagesInstalled(neededPackages) ) {
             boolean ok = RequireAndConflictButtons(neededPackages, [],
 						   _("The following packages need to be installed: %1"),
