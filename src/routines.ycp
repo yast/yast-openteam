@@ -181,6 +181,42 @@ global define void ProgressNextStage(string title) ``{
 	SCR::Write (.target.string, Openteam::sambaconf, cf);
     }
     
+    global define create_dhcpdconf() ``{
+	string cf = "";
+
+	string fromip = "";
+	string toip   = "";
+	cnt = 0;
+	while( cnt < class ) {
+	    fromip = fromip + Openteam::localip[cnt]:"0" + ".";
+	    toip = toip + Openteam::localip[cnt]:"0" + ".";
+	    cnt = cnt + 1;
+	}
+
+	cnt = 0;
+	while( cnt < 3 - class ) {
+	    fromip = fromip + "0.";
+	    toip = toip + "254.";
+	    cnt = cnt + 1;
+	}
+
+	y2milestone("FROMIP=%1", fromip);
+	y2milestone("TOIP=%1",   toip);
+	
+	
+	cf = "option domain-name \"" + Openteam::domain + "\";\n";
+	cf = cf + "option domain-name-servers " + Openteam::fqhn + ";\n";
+	cf = cf + "
+default-lease-time 600;
+max-lease-time 7200;
+";
+	cf = cf + "subnet " + mergestring(netaddr,".") +
+	    " netmask " + mergestring(Openteam::netmask, ".") + " {\n";
+
+	//SCR::Write (.target.string, Openteam::dhcpdconf, cf);
+	SCR::Write (.target.string, "/tmp/dhcpd.conf", cf);
+    }
+
     /*
      * Create Nameserver setup with db files
      * Parameters:

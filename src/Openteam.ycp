@@ -69,12 +69,14 @@ global define boolean Modified() ``{
  global string cyrusconf  = "/etc/cyrus.conf";
  global string imapdconf  = "/etc/imapd.conf";
  global string sambaconf  = "/etc/samba/smb.conf";
+ global string dhcpdconf  = "/etc/dhcpd.conf";
  global string baseldif   = "/var/lib/ldap/base.ldif";
  global string dnsldif    = "/var/lib/ldap/dnszone.ldif";
  global string nameddir   = "/var/named/";
  global string fqhn       = "this.wont.work";
  global string ipaddr     = "0.8.1.5";
  global list netmask      = [];
+ global list netaddr      = [];
  global list localip      = [];
  global string ldapbase   = "";
  global string ldaporg    = "Company Inc.";
@@ -85,6 +87,9 @@ global define boolean Modified() ``{
  global string ccode      = "";
  global list fqhnlist     = [];
  global boolean wantsamba = false;
+ global boolean wantdhcp  = false;
+ global string dhcpfrom   = "";
+ global string dhcpto     = "";
 
 /**
  * Read all openteam settings
@@ -176,7 +181,52 @@ I will use %2 as netmask")),mergestring(netmask,"."),mergestring(tmp,"."));
 
     
     localip = splitstring(ipaddr, ".");
+    cnt = 0;
+    integer class = 0;
+    while( cnt < 4 ) {
+	if( netmask[cnt]:"0" == "255" ) {
+	    netaddr[cnt] = localip[cnt]:"0";
+	    class = class + 1;
+	} else {
+	    netaddr[cnt] = "0";
+	}
+	cnt = cnt + 1;
+    }
 
+    y2milestone("NETADDR=%1", netaddr);
+
+    string fromip = "";
+    string toip   = "";
+    cnt = 0;
+    while( cnt < class ) {
+	fromip = fromip + Openteam::localip[cnt]:"0" + ".";
+	toip = toip + Openteam::localip[cnt]:"0" + ".";
+	cnt = cnt + 1;
+    }
+    
+
+    // 10.10.0.219 10.10.255.255
+    cnt = class;
+    while( cnt < 4 ) {
+	if( localip[cnt]:"0" != "0" && localip[cnt]:"0" != "254" ) {
+	    
+	}
+	cnt = cnt + 1;
+    }
+
+    cnt = 0;
+    while( cnt < 3 - class ) {
+	fromip = fromip + "0.";
+	toip = toip + "254.";
+	cnt = cnt + 1;
+    }
+
+    dhcpfrom = fromip;
+    dhcpto   = toip;
+    
+    y2milestone("FROMIP=%1", fromip);
+    y2milestone("TOIP=%1",   toip);
+    
     fqhnlist = splitstring(fqhn, ".");
     if( size(fqhnlist) <= 2 ) {
 	// warning dialog message
@@ -210,6 +260,8 @@ I will use %2 as netmask")),mergestring(netmask,"."),mergestring(tmp,"."));
     }
     
     domain = mergestring(tmp, ".");
+
+    create_dhcpdconf();
 
     Progress::NextStage();
 

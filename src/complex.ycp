@@ -86,8 +86,15 @@ global define symbol Setup1Dialog() ``{
 				    `VSpacing(),
 				    `Frame("",
 					   `VBox(
-					       `Left(`CheckBox(`id(`dhcp),
-							       _("Setup a DHCP Server"), false))
+					       `Left(`CheckBox(`id(`dhcp), `opt(`notify),
+							       _("Setup a DHCP Server"),
+							       Openteam::wantdhcp)),
+					       `HBox(
+						   `TextEntry(`id(`TE_dhcpfrom),
+							      _("From"),Openteam::dhcpfrom),
+						   `TextEntry(`id(`TE_dhcpto),
+							      _("to"),Openteam::dhcpto)
+						   )
 					       )),
 				    `VSpacing(),
 				    `Frame("",
@@ -114,6 +121,8 @@ global define symbol Setup1Dialog() ``{
 			       BackButtonLabel(), NextButtonLabel());
 
     UI::ChangeWidget(`id(`TE_workgroup), `Enabled, Openteam::wantsamba);
+    UI::ChangeWidget(`id(`TE_dhcpfrom),  `Enabled, Openteam::wantdhcp);
+    UI::ChangeWidget(`id(`TE_dhcpto),    `Enabled, Openteam::wantdhcp);
 
     any ret = nil;
     while(true) {
@@ -123,10 +132,19 @@ global define symbol Setup1Dialog() ``{
 	Openteam::ldapbase = UI(`QueryWidget(`id(`TE_ldapbase), `Value));
 	Openteam::wantsamba = UI(`QueryWidget(`id(`samba), `Value));
 	Openteam::workgroup = UI(`QueryWidget(`id(`TE_workgroup), `Value));
+	Openteam::wantdhcp = UI(`QueryWidget(`id(`dhcp), `Value));
+
 	if( Openteam::wantsamba ) {
 	    UI::ChangeWidget(`id(`TE_workgroup), `Enabled, true);
 	} else {
 	    UI::ChangeWidget(`id(`TE_workgroup), `Enabled, false);
+	}
+	if( Openteam::wantdhcp ) {
+	    UI::ChangeWidget(`id(`TE_dhcpfrom), `Enabled, true);
+	    UI::ChangeWidget(`id(`TE_dhcpto), `Enabled, true);
+	} else {
+	    UI::ChangeWidget(`id(`TE_dhcpfrom), `Enabled, false);
+	    UI::ChangeWidget(`id(`TE_dhcpto), `Enabled, false);
 	}
 	
 	string pw1 = UI(`QueryWidget(`id(`TE_pw1), `Value));
@@ -158,7 +176,7 @@ global define symbol Setup1Dialog() ``{
             break;
         }
         else {
-            y2error("unexpected retcode: %1", ret);
+            // y2error("unexpected retcode: %1", ret);
             continue;
         }
     }
