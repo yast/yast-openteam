@@ -438,9 +438,9 @@ argsfile	/var/run/slapd.args
 password-hash   {crypt}
 
 #allow           tls_2_anon
-#TLSCertificateFile    /usr/ssl/certs/cert.pem
-#TLSCertificateKeyFile /usr/ssl/certs/skey.pem
-#TLSCACertificateFile  /usr/ssl/CA/usedCA.pem
+#TLSCertificateFile    /etc/ssl/certs/cert.pem
+#TLSCertificateKeyFile /etc/ssl/certs/skey.pem
+#TLSCACertificateFile  /etc/ssl/CA/usedCA.pem
 
 #######################################################################
 # ldbm database definitions
