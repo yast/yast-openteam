@@ -749,8 +749,8 @@ objectclass: account
     Runlevel::ServiceAdjust("drac",       "enable");
     Runlevel::ServiceAdjust("postgresql", "enable");
     Runlevel::ServiceAdjust("mailgraph",  "enable");
-    Runlevel::ServiceAdjust("suad",       "enable");
     Runlevel::ServiceAdjust("sessiond",   "enable");
+    Runlevel::ServiceAdjust("suad",       "enable");
     Runlevel::ServiceAdjust("fetchd",     "enable");
 
     //SCR(`Write(.sysconfig.DELETE_OLD_CORE,       "yes"));
