@@ -733,10 +733,11 @@ objectclass: account
     SCR::Write(.sysconfig.mail.MAIL_CREATE_CONFIG,       "no");
     SCR::Write(.sysconfig.mail, nil);
 
-    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_TOMCAT,   "yes");
-    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_SSL,      "yes");
-    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_PERL,     "yes");
-    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_JSERV,    "yes");
+    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_TOMCAT,     "yes");
+    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_SSL,        "yes");
+    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_PERL,       "yes");
+    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_JSERV,      "yes");
+    SCR::Write(.sysconfig.apache.HTTPD_CONF_INCLUDE_FILES, "/etc/httpd/slots_include.conf");
     SCR::Write(.sysconfig.apache, nil);
     
     if( false ) {
@@ -744,13 +745,6 @@ objectclass: account
 	Runlevel::RunInitScript("cyrus",      "stop");
 	Runlevel::RunInitScript("saslauthd",  "stop");
 	Runlevel::RunInitScript("postgresql", "stop");
-    }
-    
-    // FIXME: copy httpd.conf.in template
-    if( SCR::Execute(.target.bash,
-		     "/usr/bin/sed 's/www.company.dom/" + fqhn + "/' /etc/httpd/httpd.conf.in > /etc/httpd/httpd.conf") != 0 ) {
-	string msg = UI(_("Unable to install httpd.conf..."));
-	Report::Error(msg);
     }
     
     if( false ) {
@@ -777,12 +771,6 @@ You won't be able to login!"));
     
     SCR::Execute(.target.bash, "/sbin/SuSEconfig >/dev/tty4 2>&1");
     
-    // FIXME: copy httpd.conf.SuSEconfig to httpd.conf
-    if( SCR::Execute(.target.bash,
-		     "/bin/cp -f /etc/httpd/httpd.conf.SuSEconfig /etc/httpd/httpd.conf") != 0 ) {
-	string msg = UI(_("Unable to install httpd.conf..."));
-	Report::Error(msg);
-    }
     
     // set hostname because apache won't run direct after installation
     SCR::Execute(.target.bash, "/bin/hostname --file /etc/HOSTNAME");
