@@ -89,7 +89,8 @@ global define symbol MainSequence() ``{
     /* FIXME: adapt to your needs */
     map aliases = $[
 	"setup1"	:   ``( Setup1Dialog() ),
-	"setup2"	:   ``( Setup2Dialog() )
+	"setup2"	:   ``( Setup2Dialog() ),
+	"setup3"	:   ``( Setup3Dialog() )
     ];
 
     /* FIXME: adapt to your needs */
@@ -98,12 +99,14 @@ global define symbol MainSequence() ``{
 	"setup1" : $[
 	    `abort	: `abort,
 	    `next	: "setup2",
-	    //`other	: "configure",
         ],
 	"setup2" : $[
 	    `abort	: `abort,
+	    `next	: "setup3",
+	],
+	"setup3" : $[
+	    `abort	: `abort,
 	    `next	: `next,
-	    // `other	: "configure",
 	]
     ];
 
