@@ -709,6 +709,9 @@ objectclass: account
     Runlevel::ServiceAdjust("drac",       "enable");
     Runlevel::ServiceAdjust("postgresql", "enable");
     Runlevel::ServiceAdjust("mailgraph",  "enable");
+    Runlevel::ServiceAdjust("suad",       "enable");
+    Runlevel::ServiceAdjust("sessiond",   "enable");
+    Runlevel::ServiceAdjust("fetchd",     "enable");
 
     //SCR(`Write(.sysconfig.DELETE_OLD_CORE,       "yes"));
     //SCR(`Write(.sysconfig.MAX_DAYS_FOR_CORE,     "1"));
@@ -751,13 +754,6 @@ objectclass: account
 	SCR::Execute(.target.bash, "/usr/bin/grep '^wrapper.classpath=/usr/lib/comfire/nastools.jar' /etc/httpd/jserv/jserv.properties || /bin/echo 'wrapper.classpath=/usr/lib/comfire/nastools.jar' >> /etc/httpd/jserv/jserv.properties");
     }
 
-    // FIXME: make suidperl suid root in permissions.secure
-    if( SCR::Execute(.target.bash, "TMPFILE=`/bin/mktemp -q /tmp/y2imaptmp.XXXXXX` || exit 1; /usr/bin/sed 's/\\(\\/usr\\/bin\\/suidperl[[:space:]]\\+root\\.root[[:space:]]\\+\\).*/\\14755/' /etc/permissions.secure > $TMPFILE; test ! -z $TMPFILE && cp -f $TMPFILE /etc/permissions.secure; rm -f $TMPFILE") != 0 ) {
-	// warning dialog message
-	string msg = UI(_("Unable to make suidperl suid root in /etc/permissions.secure!"));
-	Report::Error(msg);
-    }
-    
     // Set password of cyrus
     if (!SCR::Write(.target.passwd.cyrus, crypt(passwd) )) {
 	// Error msg
