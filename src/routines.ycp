@@ -55,7 +55,7 @@ global define void ProgressNextStage(string title) ``{
      * NONE
      *
      */
-    global define create_cyrusconf() ``{
+    global define create_cyrusconf(map imapdopts) ``{
 
 	// *********************** imapd.conf *********************************
 
@@ -67,21 +67,9 @@ global define void ProgressNextStage(string title) ``{
 	    if( regexpmatch(line, ".*:") ) {
 		line = deletechars(line, "#");
 		list keyval = splitstring(line, ":");
-		imapcnf[keyval[0]:""] = keyval[1]:"";
+		imapcnf[keyval[0]:""] = normalize(keyval[1]:"");
 	    }
 	});
-	
-	map imapdopts = $[ "tls_cert_file":"/usr/ssl/certs/cert.pem",
-			   "tls_key_file":"/usr/ssl/certs/skey.pem",
-			   "tls_ca_file":"/usr/ssl/CA/usedCA.pem",
-			   "tls_ca_path":"/usr/ssl/CA",
-			   "allowplainwithouttls":"yes",
-			   "normalizeuid":"yes",
-			   "lmtpsocket":"/var/spool/postfix/public/lmtp",
-			   "lmtp_overquota_perm_failure":"no",
-			   "sasl_pwcheck_method":"saslauthd",
-			   "sievedir":"/var/lib/sieve"
-	    ];
 	
 	foreach(`key, `val, imapdopts, ``{
 	    imapcnf[key] = val;
@@ -115,6 +103,10 @@ global define void ProgressNextStage(string title) ``{
 	SCR::Write (.target.string, Openteam::cyrusconf, cf);
     }
     
+
+    /*
+     * cleanup usage of spaces
+     */
     global define normalize(string text) ``{
 	integer i=0;
 	string norm = "";
@@ -128,7 +120,7 @@ global define void ProgressNextStage(string title) ``{
 	return norm;
     }
 
-    global define create_sambaconf() ``{
+    global define create_sambaconf(map sectglobal) ``{
 	string cf = SCR::Read(.target.string, Openteam::sambaconf);
 	list cflist = splitstring(cf,"\n");
 	
@@ -155,14 +147,9 @@ global define void ProgressNextStage(string title) ``{
 	    }
 	});
 
-	smbconf["global","ldap server"] = "localhost";
-	smbconf["global","ldap port"] = "389";
-	smbconf["global","ldap suffix"] = Openteam::ldapbase;
-	smbconf["global","ldap filter"] = "(&(uid=%u)(objectclass=sambaAccount))";
-	smbconf["global","ldap admin dn"] = "uid=cyrus," + Openteam::ldapbase;
-	smbconf["global","ldap ssl"] = "No";
-	smbconf["global","ldap del only sam attr"] = "Yes";
-	smbconf["global","workgroup"] = Openteam::workgroup;
+	foreach(`key, `val, sectglobal, ``{
+	    smbconf["global",key] = val;
+	});
 
 	cf = "[global]\n";
 	foreach(`key, `val, smbconf["global"]:$[], ``{
@@ -204,56 +191,63 @@ global define void ProgressNextStage(string title) ``{
 	y2milestone("TOIP=%1",   toip);
 	
 	
-	cf = "option domain-name \"" + Openteam::domain + "\";\n";
-	cf = cf + "option domain-name-servers " + Openteam::fqhn + ";\n";
+	cf = cf + "option domain-name \"" + Openteam::domain + "\";\n";
+	cf = cf + "option domain-name-servers " + mergestring(Openteam::localip,".") + ";\n";
+	cf = cf + "option subnet-mask " + mergestring(Openteam::netmask,".") + ";\n";
+	cf = cf + "option broadcast-address " + mergestring(Openteam::broadcast,".") + ";\n";
+	cf = cf + "option routers " + mergestring(Openteam::gateway,".") + ";\n";
+	cf = cf + "option lpr-servers " + mergestring(Openteam::localip,".") + ";\n";
+	cf = cf + "option ntp-servers " + mergestring(Openteam::localip,".") + ";\n";
+	cf = cf + "option netbios-node-type 8;\n";
+	cf = cf + "option netbios-name-servers " + mergestring(Openteam::localip,".") + ";\n";
+	cf = cf + "option netbios-dd-server " + mergestring(Openteam::localip,".") + ";\n";
+	cf = cf + "option netbios-scope \"\";\n";
+	cf = cf + "option ntp-servers " + mergestring(Openteam::localip,".") + ";\n";
+	cf = cf + "option ntp-servers " + mergestring(Openteam::localip,".") + ";\n";
+	cf = cf + "option ntp-servers " + mergestring(Openteam::localip,".") + ";\n";
 	cf = cf + "
-default-lease-time 600;
-max-lease-time 7200;
+ddns-update-style none;
+authoritative;
+default-lease-time 604800;
+max-lease-time 604800;
 ";
 	cf = cf + "subnet " + mergestring(netaddr,".") +
 	    " netmask " + mergestring(Openteam::netmask, ".") + " {\n";
+	cf = cf + "   range dynamic-bootp " + Openteam::dhcpfrom + " " + Openteam::dhcpto + ";\n";
+	cf = cf + "
+   # Win95 pre-OSR2 does not work without broadcast
+   if option vendor-class-identifier = \"MSFT 95\" {
+      always-broadcast on;
+   }
+}
+";
 
-	//SCR::Write (.target.string, Openteam::dhcpdconf, cf);
-	SCR::Write (.target.string, "/tmp/dhcpd.conf", cf);
+	SCR::Write (.target.string, Openteam::dhcpdconf, cf);
     }
 
     /*
      * Create Nameserver setup with db files
      * Parameters:
      *
-     * hostname: The FQHN of NS Host
      * serial:   initial serialnumber of NS (yyyyMMDDRR)
-     * ip:       ip address as list
-     * mask:     netmask as list
      *
      */
-    global define create_nssetup(string hostname, string serial, list ip, list mask, string basedn) ``{
+    global define create_nssetup(string serial) ``{
 	string ns      = "";
 	string nsldif  = "";
-	string domain  = "";
-	string ipaddr  = mergestring(ip, ".");
+	string ipaddr  = mergestring(Openteam::localip, ".");
 	string revnet = "";
 	string inaddr = "";
 	integer i = 0;
 	integer cnt = 0;
 	list tmp    = [];
-	list tmpdom = splitstring(hostname, ".");
-
-	// Remove Hostpart from fqhn and generate domain
-	while( i < size(tmpdom) ) {
-	    if( i > 0 )
-		tmp = add(tmp, select(tmpdom, i, ""));
-	    i = i + 1;
-	}
-	
-	domain = mergestring(tmp, ".");
 
 	////////////////////////////////////////////////////////////////////////////////
 	// NS Forward mapping
 	////////////////////////////////////////////////////////////////////////////////
 
 	ns = "$TTL 172800\n";
-	ns = ns + sformat("@\tIN\tSOA\t%1. postmaster.%1. (\n", hostname);
+	ns = ns + sformat("@\tIN\tSOA\t%1. postmaster.%1. (\n", Openteam::fqhn);
 	ns = ns + sformat("\t\t\t%1\t; serial #YYMMDDRevision", serial);
 	ns = ns +
 	    "
@@ -263,16 +257,14 @@ max-lease-time 7200;
 \t\t\t1D)\t; minimum TTL
 
 ";
-	ns = ns + sformat("\tIN\tNS\t%1.\n\n", hostname);
+	ns = ns + sformat("\tIN\tNS\t%1.\n\n", Openteam::fqhn);
 	ns = ns + sformat("\tIN\tA\t%1\n", ipaddr);
-	ns = ns + sformat("\tIN\tMX 10\t%1.\n\n", hostname);
+	ns = ns + sformat("\tIN\tMX 10\t%1.\n\n", Openteam::fqhn);
 	ns = ns + sformat("%1\tIN\tA\t%2\n",
-			  select( splitstring(hostname, "."), 0, ""),
+			  select( splitstring(Openteam::fqhn, "."), 0, ""),
 			  ipaddr);
-	ns = ns + sformat("smtp\tIN\tCNAME\t%1.\n", hostname);
 
-
-	SCR::Write(.target.string, Openteam::nameddir + domain + ".zone", ns);
+	SCR::Write(.target.string, Openteam::nameddir + Openteam::domain + ".zone", ns);
 
 	////////////////////////////////////////////////////////////////////////////////
 	// NS Reverse mapping
@@ -280,7 +272,7 @@ max-lease-time 7200;
 
         string nmsub = "";
 	// count number of seros in netmask
-	foreach(`nmsub, mask, ``{
+	foreach(`nmsub, Openteam::netmask, ``{
 	    if( nmsub == "0" )
 		cnt = cnt + 1;
 	});
@@ -292,7 +284,8 @@ max-lease-time 7200;
 	tmp = [];
 	i = 4 - cnt;
 	while( i > 0 ) {
-	    tmp = add(tmp, select(ip, (i - 1), 0 ));
+	    //tmp = add(tmp, select(Openteam::localip, (i - 1), 0 ));
+	    tmp = add(tmp, Openteam::localip[i - 1]:"0");
 	    i = i - 1;
 	}
 
@@ -302,7 +295,8 @@ max-lease-time 7200;
 	tmp = [];
 	i = 0;
 	while( i < cnt ) {
-	    tmp = add(tmp, select(ip, (4 - i - 1), 0 ));
+	    //tmp = add(tmp, select(Openteam::localip, (4 - i - 1), 0 ));
+	    tmp = add(tmp, Openteam::localip[4 - i - 1]:"0");
 	    i = i + 1;
 	}
 
@@ -311,7 +305,7 @@ max-lease-time 7200;
 	y2milestone("REVNET=%1", revnet);
 
 	ns = "$TTL 172800\n";
-	ns = ns + sformat("@\tIN\tSOA\t%1. postmaster.%1. (\n", hostname);
+	ns = ns + sformat("@\tIN\tSOA\t%1. postmaster.%1. (\n", Openteam::fqhn);
 	ns = ns + sformat("\t\t\t%1\t; serial #YYMMDDRevision", serial);
 	ns = ns +
 	    "
@@ -321,8 +315,8 @@ max-lease-time 7200;
 \t\t\t1D)\t; minimum TTL
 
 ";
-	ns = ns + sformat("\tIN\tNS\t%1.\n", hostname);
-	ns = ns + sformat("%1\tIN\tPTR\t%2.\n", revnet, hostname);
+	ns = ns + sformat("\tIN\tNS\t%1.\n", Openteam::fqhn);
+	ns = ns + sformat("%1\tIN\tPTR\t%2.\n", revnet, Openteam::fqhn);
 
 	SCR::Write(.target.string, Openteam::nameddir + inaddr + ".zone", ns);
 	
@@ -336,9 +330,9 @@ max-lease-time 7200;
 		     "/bin/cat /etc/named.conf.in > /etc/named.conf; " +
 		     "TMPFILE=`/bin/mktemp -q /tmp/y2namedtmp.XXXXXX` || exit 1; " +
 		     "/bin/cat<<EOF > $TMPFILE\n" +
-		     sformat("zone \"%1\" {\n", domain) +
+		     sformat("zone \"%1\" {\n", Openteam::domain) +
 		     "        type master;\n" +
-		     sformat("        file \"%1.zone\";\n", domain) +
+		     sformat("        file \"%1.zone\";\n", Openteam::domain) +
 		     "};\n\n" +
 		     sformat("zone \"%1\" {\n", inaddr) +
 		     "        type master;\n" +
@@ -351,7 +345,7 @@ cat $TMPFILE >> /etc/named.conf; rm -f $TMPFILE");
 	//SCR (`Write (.target.string, namedconf, ns));
 
 	// TOP
-	nsldif = sformat("dn: o=DNS,%1", basedn);
+	nsldif = sformat("dn: o=DNS,%1", Openteam::ldapbase);
 	nsldif = nsldif + "
 objectClass: top
 objectClass: organization
@@ -360,36 +354,36 @@ o: DNS
 ";
 
 	// Forward/Reverse Zone
-	nsldif = nsldif + sformat("dn: relativeDomainName=@,o=DNS,%1", basedn);
+	nsldif = nsldif + sformat("dn: relativeDomainName=@,o=DNS,%1", Openteam::ldapbase);
 	nsldif = nsldif + "
 objectClass: top
 objectClass: dNSZone
 relativeDomainName: @
 ";
-	nsldif = nsldif + sformat("zoneName: %1\n", domain);
+	nsldif = nsldif + sformat("zoneName: %1\n", Openteam::domain);
 	nsldif = nsldif + sformat("zoneName: %1\n", inaddr);
 	nsldif = nsldif + "dNSTTL: 172800\n";
 	nsldif = nsldif + sformat("sOARecord: %1. postmaster.%1. %2 8H 2H 1W 1D\n",
-				  hostname, serial);
-	nsldif = nsldif + sformat("nSRecord: %1.\n", hostname);
-	nsldif = nsldif + sformat("mXRecord: 10 %1.\n", hostname);
+				  Openteam::fqhn, serial);
+	nsldif = nsldif + sformat("nSRecord: %1.\n", Openteam::fqhn);
+	nsldif = nsldif + sformat("mXRecord: 10 %1.\n", Openteam::fqhn);
 	nsldif = nsldif + sformat("aRecord: %1\n\n", ipaddr);
 
 	// forward host
 	nsldif = nsldif + sformat("dn: relativeDomainName=%1,o=DNS,%2",
-				  select( splitstring(hostname, "."), 0, ""), basedn);
+				  select( splitstring(Openteam::fqhn, "."), 0, ""), Openteam::ldapbase);
 	nsldif = nsldif + "
 objectClass: top
 objectClass: dNSZone
 ";
 	nsldif = nsldif + sformat("relativeDomainName: %1\n",
-				  select( splitstring(hostname, "."), 0, ""));
-	nsldif = nsldif + sformat("zoneName: %1\n", domain);
+				  select( splitstring(Openteam::fqhn, "."), 0, ""));
+	nsldif = nsldif + sformat("zoneName: %1\n", Openteam::domain);
 	nsldif = nsldif + "dNSTTL: 172800\n";
 	nsldif = nsldif + sformat("aRecord: %1\n\n", ipaddr);
 
 	// reverse host
-	nsldif = nsldif + sformat("dn: relativeDomainName=%1,o=DNS,%2", revnet, basedn);
+	nsldif = nsldif + sformat("dn: relativeDomainName=%1,o=DNS,%2", revnet, Openteam::ldapbase);
 	nsldif = nsldif + "
 objectClass: top
 objectClass: dNSZone
@@ -397,7 +391,7 @@ objectClass: dNSZone
 	nsldif = nsldif + sformat("relativeDomainName: %1\n", revnet);
 	nsldif = nsldif + sformat("zoneName: %1\n", inaddr);
 	nsldif = nsldif + "dNSTTL: 172800\n";
-	nsldif = nsldif + sformat("PTRRecord: %1.\n\n", hostname);
+	nsldif = nsldif + sformat("PTRRecord: %1.\n\n", Openteam::fqhn);
 
 	SCR::Write(.target.string, Openteam::dnsldif, nsldif);
     }
@@ -407,11 +401,9 @@ objectClass: dNSZone
      * Create sldapd.conf (ldap server configuration)
      * Parameters:
      *
-     * basedn: the basedn
-     * passwd: the unencrypted admin password
      *
      */
-    global define create_slapdconf(string basedn, string passwd) ``{
+    global define create_slapdconf() ``{
 	string ldp = "";
 
 	ldp = "#
@@ -458,9 +450,9 @@ mode		0600
 
 ";
 
-	ldp = ldp + sformat("suffix		%1\n", basedn);
-	ldp = ldp + sformat("rootdn		uid=cyrus,%1\n", basedn);
-	ldp = ldp + sformat("rootpw		{crypt}%1\n", crypt(passwd));
+	ldp = ldp + sformat("suffix		%1\n", Openteam::ldapbase);
+	ldp = ldp + sformat("rootdn		uid=cyrus,%1\n", Openteam::ldapbase);
+	ldp = ldp + sformat("rootpw		{crypt}%1\n", crypt(Openteam::passwd));
 
 	ldp = ldp + "
 # ******************************* System Backend **********************
@@ -481,8 +473,8 @@ index           vaddress,mail eq,sub,pres
 
 # Private AddressBook
 ";
-	ldp = ldp + sformat("access to dn=\"ou=addr,uid=(.*),%1\"\n", basedn);
-	ldp = ldp + sformat("  by dn=\"uid=$1,%1\" write", basedn);
+	ldp = ldp + sformat("access to dn=\"ou=addr,uid=(.*),%1\"\n", Openteam::ldapbase);
+	ldp = ldp + sformat("  by dn=\"uid=$1,%1\" write", Openteam::ldapbase);
 	ldp = ldp + "  by * none
 
 # To let PAM authenticate
@@ -498,7 +490,7 @@ access to attr=shadowLastChange
 # only the Admin is allowed to change the members of the addressadmins group
 ";
 
-	ldp = ldp + sformat("access to dn.base=\"cn=AddressAdmins,o=AddressBook,%1\"", basedn);
+	ldp = ldp + sformat("access to dn.base=\"cn=AddressAdmins,o=AddressBook,%1\"", Openteam::ldapbase);
 	ldp = ldp + "
   by users read
   by * none
@@ -507,8 +499,8 @@ access to attr=shadowLastChange
 # Public Address Book
 ";
 
-	ldp = ldp + sformat("access to dn.subtree=\"o=AddressBook,%1\"\n",basedn);
-	ldp = ldp + sformat("  by group=\"cn=AddressAdmins,o=AddressBook,%1\" write",basedn);
+	ldp = ldp + sformat("access to dn.subtree=\"o=AddressBook,%1\"\n",Openteam::ldapbase);
+	ldp = ldp + sformat("  by group=\"cn=AddressAdmins,o=AddressBook,%1\" write",Openteam::ldapbase);
 	ldp = ldp + "
   by users read
   by * none
@@ -530,7 +522,7 @@ access to attr=comFireTaskDays,comFireAppointmentDays
   by * none
 ";
 
-	SCR (`Write (.target.string, slapdconf, ldp));
+	SCR (`Write (.target.string, Openteam::slapdconf, ldp));
     }
 
     global define write_postconf(map params) ``{
@@ -546,10 +538,9 @@ access to attr=comFireTaskDays,comFireAppointmentDays
      * Append LDAP lookup tables to /etc/postfix/main.cf (postfix configuration)
      * Parameters:
      *
-     * basedn:   the basedn
      *
      */
-    global define append_ldaptables(string basedn) ``{
+    global define append_ldaptables() ``{
 	string cf = SCR::Read(.target.string, Openteam::maincf );
 
 	cf = cf + "
@@ -560,7 +551,7 @@ ldapaliases_bind = no
 ldapaliases_timeout = 20
 ";
 
-	cf = cf + sformat("ldapaliases_search_base = %1", basedn);
+	cf = cf + sformat("ldapaliases_search_base = %1", Openteam::ldapbase);
 	cf = cf + "
 ldapaliases_query_filter = (|(alias=%s)(&(fn=%s)(objectclass=SuSEIMAPFolderObject)))
 ldapaliases_result_attribute = uid,mailDeliveryProgram,deliverToUID
@@ -574,7 +565,7 @@ ldapvuser_bind = no
 ldapvuser_timeout = 20
 ";
 
-	cf = cf + sformat("ldapvuser_search_base = %1", basedn);
+	cf = cf + sformat("ldapvuser_search_base = %1", Openteam::ldapbase);
 	cf = cf + "
 ldapvuser_query_filter = (&(objectclass=SuSEVirtUserObject)(vaddress=%s))
 ldapvuser_result_attribute = uid,mailDeliveryProgram
@@ -588,7 +579,7 @@ ldapmailenab_bind = no
 ldapmailenab_timeout = 20
 ";
 
-	cf = cf + sformat("ldapmailenab_search_base = %1", basedn);
+	cf = cf + sformat("ldapmailenab_search_base = %1", Openteam::ldapbase);
 	cf = cf + "
 ldapmailenab_query_filter = (mail=%s)
 ldapmailenab_result_attribute = mailenabled
@@ -601,7 +592,7 @@ ldaprelcert_server_port = 389
 ldaprelcert_bind = no
 ldaprelcert_timeout = 20
 ";
-	cf = cf + sformat("ldaprelcert_search_base = %1", basedn);
+	cf = cf + sformat("ldaprelcert_search_base = %1", Openteam::ldapbase);
 	cf = cf + "
 ldaprelcert_query_filter = (relayClientcert=%s)
 ldaprelcert_result_attribute = uid
@@ -614,7 +605,7 @@ ldapcanonical_server_port = 389
 ldapcanonical_bind = no
 ldapcanonical_timeout = 20
 ";
-	cf = cf + sformat("ldapcanonical_search_base = %1", basedn);
+	cf = cf + sformat("ldapcanonical_search_base = %1", Openteam::ldapbase);
 	cf = cf + "
 ldapcanonical_query_filter = (uid=%s)
 ldapcanonical_result_attribute = mail
@@ -629,32 +620,13 @@ ldapcanonical_scope = one
      * Generate base ldif for LDAP Server
      * Parameters:
      *
-     * basedn:   the basedn
-     * ldaporg:  Name of Organization
-     * hostname: The FQHN of the mailhost
-     * passwd:   the unencrypted password of the administrative account
-     * ccode:    the ISO 3166 country code
-     * lang:     The user language
      *
      */
-    global define genldif(string basedn, string ldaporg, string hostname, string passwd, string ccode, string lang) ``{
+    global define genldif() ``{
       string ldif ="";
-      string domain = "";
-      list tmp = [];
-      list tmpdom = splitstring(hostname, ".");
-      integer i = 0;
-
-      // Remove Hostpart from fqhn and generate domain
-      while( i < size(tmpdom) ) {
-	if( i > 0 )
-	  tmp = add(tmp, select(tmpdom, i, ""));
-	i = i + 1;
-      }
-      
-      domain = mergestring(tmp, ".");
 
       // TOP DN entry
-      ldif = sformat("dn: %1", basedn);
+      ldif = sformat("dn: %1", Openteam::ldapbase);
       ldif = ldif + "
 objectclass: top
 objectclass: dcObject
@@ -668,7 +640,7 @@ objectclass: domain
       // If we don't do it, a search would be to slow.
       // We will remove it after creating the base entries with ldapadd in
       // imap_step2.ycp
-      ldif = ldif + sformat("dn: uid=cyrus,%1",basedn);
+      ldif = ldif + sformat("dn: uid=cyrus,%1",Openteam::ldapbase);
       ldif = ldif + "
 objectclass: top
 objectclass: person
@@ -679,18 +651,18 @@ objectClass: SuSEVirtUserObject
 vaddress: info@foo.bar
 mailenabled: OK
 ";
-      ldif = ldif + sformat("mailDomain: %1\n", domain);
-      ldif = ldif + sformat("mail: cyrus@%1\n", domain);
-      ldif = ldif + sformat("preferredLanguage: %1\n", lang);
-      ldif = ldif + sformat("c: %1", ccode);
+      ldif = ldif + sformat("mailDomain: %1\n", Openteam::domain);
+      ldif = ldif + sformat("mail: cyrus@%1\n", Openteam::domain);
+      ldif = ldif + sformat("preferredLanguage: %1\n", Openteam::lang);
+      ldif = ldif + sformat("c: %1", Openteam::ccode);
       ldif = ldif + "
 uid: cyrus
 cn: cyrus
 sn: cyrus
 ";
-      ldif = ldif + sformat("o: %1\n", ldaporg);
-      ldif = ldif + sformat("imapServer: %1\n", hostname);
-      ldif = ldif + sformat("smtpServer: %1", hostname);
+      ldif = ldif + sformat("o: %1\n", Openteam::ldaporg);
+      ldif = ldif + sformat("imapServer: %1\n", Openteam::fqhn);
+      ldif = ldif + sformat("smtpServer: %1", Openteam::fqhn);
       ldif = ldif + "
 imapPort: 143
 sievePort: 2000
@@ -698,7 +670,7 @@ sievePort: 2000
 ";
 
       // Default primary Group
-      ldif = ldif + sformat("dn: cn=users,%1",basedn);
+      ldif = ldif + sformat("dn: cn=users,%1",Openteam::ldapbase);
       ldif = ldif + "
 objectclass: top
 objectclass: posixGroup
@@ -709,7 +681,7 @@ userpassword: {crypt}*
 ";
 
       // Default Shared Folder
-      ldif = ldif + sformat("dn: fn=users,%1",basedn);
+      ldif = ldif + sformat("dn: fn=users,%1",Openteam::ldapbase);
       ldif = ldif + "
 objectclass: top
 objectclass: SuSEIMAPFolderObject
@@ -719,7 +691,7 @@ mailenabled: REJECT
 ";
 
       // Public AddressBook root object
-      ldif = ldif + sformat("dn: o=AddressBook,%1",basedn);
+      ldif = ldif + sformat("dn: o=AddressBook,%1",Openteam::ldapbase);
       ldif = ldif + "
 objectclass: top
 objectclass: organization
@@ -728,15 +700,15 @@ o: AddressBook
 ";
 
       // Public AddressBook Admin Group
-      ldif = ldif + sformat("dn: cn=AddressAdmins,o=AddressBook,%1",basedn);
+      ldif = ldif + sformat("dn: cn=AddressAdmins,o=AddressBook,%1",Openteam::ldapbase);
       ldif = ldif + "
 objectclass: top
 objectclass: groupofNames
 cn: AddressAdmins
 ";
-      ldif = ldif + sformat("member: uid=cyrus,%1\n",basedn);
+      ldif = ldif + sformat("member: uid=cyrus,%1\n",Openteam::ldapbase);
 
-      SCR (`Write (.target.string, baseldif, ldif));
+      SCR (`Write (.target.string, Openteam::baseldif, ldif));
     }
 
 /* EOF */

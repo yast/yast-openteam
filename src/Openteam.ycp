@@ -74,10 +74,11 @@ global define boolean Modified() ``{
  global string dnsldif    = "/var/lib/ldap/dnszone.ldif";
  global string nameddir   = "/var/named/";
  global string fqhn       = "this.wont.work";
- global string ipaddr     = "0.8.1.5";
  global list netmask      = [];
+ global list broadcast    = [];
  global list netaddr      = [];
  global list localip      = [];
+ global list gateway      = [];
  global string ldapbase   = "";
  global string ldaporg    = "Company Inc.";
  global string workgroup  = "Workgroup";
@@ -129,13 +130,14 @@ global define boolean Read() ``{
 	if( ifmap["name"]:"" == "eth0" ) {
 	    integer ifaddr = ifmap["value","inet","addr"]:0;
 	    integer ifnm   = ifmap["value","inet","mask"]:0;
-	    ipaddr = ip2string(ifaddr);
-	    // from integer to string
-	    netmask = splitstring(ip2string(ifnm),".");
+	    integer ifbk   = ifmap["value","inet","bcast"]:0;
+	    localip   = splitstring(ip2string(ifaddr),".");
+	    netmask   = splitstring(ip2string(ifnm),".");
+	    broadcast = splitstring(ip2string(ifbk),".");
 	}
     });
     
-    if( netmask == [] || ipaddr == "" ) {
+    if( netmask == [] || localip == [] ) {
 	// warning dialog message
 	string msg = sformat(UI(_("unable to determine netmask and/or ip address!")));
 	// return `back;
@@ -143,9 +145,17 @@ global define boolean Read() ``{
 	return false;
     }
 
-    y2milestone("IPADDR=%1", ipaddr);
+    y2milestone("LOCALIP=%1", localip);
     y2milestone("NETMASK=%1", netmask);
     
+
+    list routes = SCR::Read(.routes);
+    foreach(`rmap, routes, ``{
+	if( rmap["destination"]:"" == "default" ) {
+	    gateway = splitstring(rmap["gateway"]:"", ".");
+	}
+    });
+
     string nmsub = "";
     integer cnt = 0;
     integer gcnt = 0;
@@ -180,7 +190,6 @@ I will use %2 as netmask")),mergestring(netmask,"."),mergestring(tmp,"."));
     }
 
     
-    localip = splitstring(ipaddr, ".");
     cnt = 0;
     integer class = 0;
     while( cnt < 4 ) {
@@ -221,8 +230,8 @@ I will use %2 as netmask")),mergestring(netmask,"."),mergestring(tmp,"."));
 	cnt = cnt + 1;
     }
 
-    dhcpfrom = fromip;
-    dhcpto   = toip;
+    dhcpfrom = fromip + "1";
+    dhcpto   = toip   + "254";
     
     y2milestone("FROMIP=%1", fromip);
     y2milestone("TOIP=%1",   toip);
@@ -261,8 +270,6 @@ I will use %2 as netmask")),mergestring(netmask,"."),mergestring(tmp,"."));
     
     domain = mergestring(tmp, ".");
 
-    create_dhcpdconf();
-
     Progress::NextStage();
 
     if(Abort()) return false;
@@ -287,56 +294,44 @@ global define boolean Write() ``{
     if( Openteam::wantsamba ) {
 	steps = steps + 1;
     }
+    if( Openteam::wantdhcp ) {
+	steps = steps + 1;
+    }
 
     integer sl = 500;
     // sleep(sl);
     
-    
-    if( Openteam::wantsamba ) {
-	Progress::New(caption, " ", steps, [
-			  _("Setup nameserver"),
-			  _("Setup SMTP service"),
-			  _("Setup LDAP directory service"),
-			  _("Setup Postgres Database"),
-			  _("Setup POP3/IMAP subsystem"),
-			  _("Create initial account, group and shared folder"),
-			  _("Setup samba server"),
-			  _("Setup system and finishing installation")
-			  ], [
-			      _("Setting up nameserver"),
-			      _("Setting up SMTP service"),
-			      _("Setting up LDAP directory service"),
-			      _("Setting up Postgres Database"),
-			      _("Setting up POP3/IMAP subsystem"),
-			      _("Creating initial account, group and shared folder"),
-			      _("Setting up samba server"),
-			      _("Setting up system and finishing installation"),
-			      _("Finished")
-			      ],
-		      ""
-	    );
-    } else {
-	Progress::New(caption, " ", steps, [
-			  _("Setup nameserver"),
-			  _("Setup SMTP service"),
-			  _("Setup LDAP directory service"),
-			  _("Setup Postgres Database"),
-			  _("Setup POP3/IMAP subsystem"),
-			  _("Create initial account, group and shared folder"),
-			  _("Setup system and finishing installation")
-			  ], [
-			      _("Setting up nameserver"),
-			      _("Setting up SMTP service"),
-			      _("Setting up LDAP directory service"),
-			      _("Setting up Postgres Database"),
-			      _("Setting up POP3/IMAP subsystem"),
-			      _("Creating initial account, group and shared folder"),
-			      _("Setting up system and finishing installation"),
-			      _("Finished")
-			      ],
-		      ""
-	    );
+    list allsteps = [
+	_("Setup nameserver"),
+	_("Setup SMTP service"),
+	_("Setup LDAP directory service"),
+	_("Setup Postgres Database"),
+	_("Setup POP3/IMAP subsystem"),
+	_("Create initial account, group and shared folder")
+	];
+    list  psteps = [
+	_("Setting up nameserver"),
+	_("Setting up SMTP service"),
+	_("Setting up LDAP directory service"),
+	_("Setting up Postgres Database"),
+	_("Setting up POP3/IMAP subsystem"),
+	_("Creating initial account, group and shared folder")
+	];
+
+    if( Openteam::wantsamba) {
+	allsteps = add(allsteps, _("Setup samba server"));
+	psteps   = add(psteps, _("Setting up samba server"));
     }
+    if( Openteam::wantdhcp) {
+	allsteps = add(allsteps, _("Setup dhcp server"));
+	psteps   = add(psteps, _("Setting up dhcp server"));
+    }
+
+    allsteps = add(allsteps, _("Setup system and finishing installation"));
+    psteps   = add(psteps, _("Setting up system and finishing installation"));
+    psteps   = add(psteps, _("Finished"));
+
+    Progress::New(caption, " ", steps, allsteps, psteps, "");
 
     if(Abort()) return false;
     Progress::NextStage ();
@@ -358,7 +353,7 @@ global define boolean Write() ``{
 	
     y2milestone("NS SERIAL=%1", serial);
 	
-    create_nssetup(fqhn, serial, localip, netmask, ldapbase);
+    create_nssetup(serial);
 	
     // UI(`ProgressMilestoneUI( 20, _("Setting up SMTP service"), 1 ));
     if(Abort()) return false;
@@ -402,7 +397,7 @@ Some Mailclients as Outlook Express won't be able to send mails via SSL!"));
 
     if( SCR::Execute(.target.bash, "grep -E '^(ldapaliases_server_host|ldapvuser_server_host|ldapmailenab_server_host|ldaprelcert_server_host)' /etc/postfix/main.cf") != 0 ) {
 	y2milestone("appending ldap table definition to main.cf");
-	append_ldaptables(ldapbase);
+	append_ldaptables();
     }
 
 
@@ -425,8 +420,8 @@ You won't be able to use the restore function of the Expert Postfix Configuratio
     SCR::Write(.etc.openldap.ldap_conf.pam_login_attribute, "uid");
     SCR::Write(.etc.openldap.ldap_conf, nil);
 
-    create_slapdconf(ldapbase, passwd);
-    genldif(ldapbase, ldaporg, fqhn, passwd, ccode, lang);
+    create_slapdconf();
+    genldif();
 
     SCR::Write(.etc.nsswitch_conf.passwd, "files ldap");
     SCR::Write(.etc.nsswitch_conf.group,  "files ldap");
@@ -521,7 +516,19 @@ EOF");
     Progress::NextStage ();
 	
     // generate new configuration files
-    create_cyrusconf();
+    map imapdopts = $[ "tls_cert_file":"/usr/ssl/certs/cert.pem",
+		       "tls_key_file":"/usr/ssl/certs/skey.pem",
+		       "tls_ca_file":"/usr/ssl/CA/usedCA.pem",
+		       "tls_ca_path":"/usr/ssl/CA",
+		       "allowplainwithouttls":"yes",
+		       "normalizeuid":"yes",
+		       "lmtpsocket":"/var/spool/postfix/public/lmtp",
+		       "lmtp_overquota_perm_failure":"no",
+		       "sasl_pwcheck_method":"saslauthd",
+		       "sievedir":"/var/lib/sieve",
+		       "duplicatesuppression":"yes"
+	];
+    create_cyrusconf(imapdopts);
     
     // FIXME: Add lmtpsocket option to imapd.conf
     SCR::Execute(.target.bash, "/usr/bin/grep '^lmtpsocket' /etc/imapd.conf || /bin/echo 'lmtpsocket: /var/spool/postfix/public/lmtp' >> /etc/imapd.conf");
@@ -620,7 +627,16 @@ EOF") != 0) {
 	if(Abort()) return false;
 	Progress::NextStage ();
 
-	create_sambaconf();
+	map globalopts = $[ "ldap server":"localhost",
+			    "ldap port":"389",
+			    "ldap suffix":ldapbase,
+			    "ldap filter":"(&(uid=%u)(objectclass=sambaAccount))",
+			    "ldap admin dn":"uid=cyrus," + ldapbase,
+			    "ldap ssl":"No",
+			    "ldap del only sam attr":"Yes",
+			    "workgroup":workgroup ];
+
+	create_sambaconf(globalopts);
 
 	if( SCR::Execute(.target.bash, "/usr/bin/smbpasswd -w '" + passwd + "'") != 0 ) {
 	    // warning dialog message
@@ -649,6 +665,14 @@ objectclass: account
 	Runlevel::ServiceAdjust("smb", "enable");
 	SCR::Write(.sysconfig.samba.SAMBA_SAM, "ldap");
 	SCR::Write(.sysconfig.samba, nil);
+    }
+
+    if( Openteam::wantdhcp ) {
+	if(Abort()) return false;
+	Progress::NextStage ();
+
+	create_dhcpdconf();
+	Runlevel::ServiceAdjust("dhcpd", "enable");
     }
 
     //UI(`ProgressMilestoneUI( 120, _("Update configuration files"), 6 ));
