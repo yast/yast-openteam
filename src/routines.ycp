@@ -555,7 +555,6 @@ ldapaliases_timeout = 20
 	cf = cf + "
 ldapaliases_query_filter = (|(alias=%s)(&(fn=%s)(objectclass=SuSEIMAPFolderObject)))
 ldapaliases_result_attribute = uid,mailDeliveryProgram,deliverToUID
-ldapaliases_lookup_wildcards = no
 ldapaliases_scope = one
 
 # virtual user database for SuSE Linux Open Team Server
@@ -569,7 +568,6 @@ ldapvuser_timeout = 20
 	cf = cf + "
 ldapvuser_query_filter = (&(objectclass=SuSEVirtUserObject)(vaddress=%s))
 ldapvuser_result_attribute = uid,mailDeliveryProgram
-ldapvuser_lookup_wildcards = no
 ldapvuser_scope = one
 
 # this is used to enable/disable mail reception
@@ -581,9 +579,8 @@ ldapmailenab_timeout = 20
 
 	cf = cf + sformat("ldapmailenab_search_base = %1", Openteam::ldapbase);
 	cf = cf + "
-ldapmailenab_query_filter = (mail=%s)
+ldapmailenab_query_filter = (reject=%s)
 ldapmailenab_result_attribute = mailenabled
-ldapmailenab_lookup_wildcards = no
 ldapmailenab_scope = one
 
 # this is used for client certificate based relaying
@@ -596,21 +593,7 @@ ldaprelcert_timeout = 20
 	cf = cf + "
 ldaprelcert_query_filter = (relayClientcert=%s)
 ldaprelcert_result_attribute = uid
-ldaprelcert_lookup_wildcards = no
 ldaprelcert_scope = one
-
-# this is used for header rewriting
-ldapcanonical_server_host = localhost
-ldapcanonical_server_port = 389
-ldapcanonical_bind = no
-ldapcanonical_timeout = 20
-";
-	cf = cf + sformat("ldapcanonical_search_base = %1", Openteam::ldapbase);
-	cf = cf + "
-ldapcanonical_query_filter = (uid=%s)
-ldapcanonical_result_attribute = mail
-ldapcanonical_lookup_wildcards = no
-ldapcanonical_scope = one
 ";
 	SCR::Write(.target.string, Openteam::maincf, cf);
     }
