@@ -419,7 +419,10 @@ include                /etc/openldap/schema/dnszone.schema
 include                /etc/openldap/schema/samba.schema
 
 # Define global ACLs to disable default read access.
-access to * by * read
+access to *
+    by peername=\"ip=127\\.0\\.0\\.1\" read
+    by users read
+    by * none
 
 #
 # Check, if entries will match to db
@@ -428,6 +431,7 @@ schemacheck	on
 
 loglevel	0
 sizelimit	1000
+#threads        32
 
 pidfile		/var/run/slapd.pid
 argsfile	/var/run/slapd.args
@@ -444,6 +448,8 @@ password-hash   {crypt}
 
 # ******************************* System Backend **********************
 database	bdb
+cachesize       50000
+checkpoint      3000 10
 directory	/var/lib/ldap
 lastmod		on
 mode		0600
@@ -509,16 +515,22 @@ access to attr=shadowLastChange
 # - first look at the OpenLDAPaci attribute
 # - if that doesn't exist or the user-dn is not in the subject clause,
 #   give write access to the owner of the entry and read acces to anyone else
-access to attr=c,cn,telephoneNumber,facsimileTelephoneNumber,pager,title,givenname,sn,l,description,mail,street,postalCode,st,homePhone,ou,initials,mobile,labeledURI,preferredLanguage,entry
+access to attr=c,cn,telephoneNumber,facsimileTelephoneNumber,pager,title,givenname,sn,l,description,mail,street,postalCode,st,homePhone,ou,initials,mobile,labeledURI,preferredLanguage,entry,objectclass
   by aci write break
   by self write
-  by * read
+  by users read
+  by peername=\"ip=127\\.0\\.0\\.1\" read
+  by * none
+
 # if the above break statement is reached add read access for everyone
-access to attr=c,cn,telephoneNumber,facsimileTelephoneNumber,pager,title,givenname,sn,l,description,mail,street,postalCode,st,homePhone,ou,initials,mobile,labeledURI,preferredLanguage,entry
-  by * +rsc
+access to attr=c,cn,telephoneNumber,facsimileTelephoneNumber,pager,title,givenname,sn,l,description,mail,street,postalCode,st,homePhone,ou,initials,mobile,labeledURI,preferredLanguage,entry,objectclass
+  by users +rsc
+  by peername=\"ip=127\\.0\\.0\\.1\" +rsc
+  by * none
 
 access to attr=comFireTaskDays,comFireAppointmentDays
   by self write
+  by peername=\"ip=127\\.0\\.0\\.1\" read
   by * none
 ";
 
