@@ -37,3 +37,5 @@ IBMJava2-JRE
 spamassassin
 jakarta-tomcat
 jserv
+CommonC++
+ldapcpplib
