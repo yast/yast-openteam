@@ -516,27 +516,19 @@ EOF");
     Progress::NextStage ();
 	
     // generate new configuration files
-    map imapdopts = $[ "tls_cert_file":"/usr/ssl/certs/cert.pem",
-		       "tls_key_file":"/usr/ssl/certs/skey.pem",
-		       "tls_ca_file":"/usr/ssl/CA/usedCA.pem",
-		       "tls_ca_path":"/usr/ssl/CA",
-		       "allowplainwithouttls":"yes",
+    map imapdopts = $[ "allowplainwithouttls":"yes",
 		       "normalizeuid":"yes",
 		       "lmtpsocket":"/var/spool/postfix/public/lmtp",
 		       "lmtp_overquota_perm_failure":"no",
 		       "sasl_pwcheck_method":"saslauthd",
 		       "sievedir":"/var/lib/sieve",
+		       // "tls_cert_file":"/usr/ssl/certs/cert.pem",
+		       // "tls_key_file":"/usr/ssl/certs/skey.pem",
+		       // "tls_ca_file":"/usr/ssl/CA/usedCA.pem",
+		       // "tls_ca_path":"/usr/ssl/CA",
 		       "duplicatesuppression":"yes"
 	];
     create_cyrusconf(imapdopts);
-    
-    // FIXME: Add lmtpsocket option to imapd.conf
-    SCR::Execute(.target.bash, "/usr/bin/grep '^lmtpsocket' /etc/imapd.conf || /bin/echo 'lmtpsocket: /var/spool/postfix/public/lmtp' >> /etc/imapd.conf");
-    
-    SCR::Execute(.target.bash, "/usr/bin/grep '^tls_cert_file' /etc/imapd.conf || /bin/echo 'tls_cert_file: /usr/ssl/certs/cert.pem' >> /etc/imapd.conf");
-    SCR::Execute(.target.bash, "/usr/bin/grep '^tls_key_file' /etc/imapd.conf || /bin/echo 'tls_key_file: /usr/ssl/certs/skey.pem' >> /etc/imapd.conf");
-    SCR::Execute(.target.bash, "/usr/bin/grep '^tls_ca_file' /etc/imapd.conf || /bin/echo 'tls_ca_file: /usr/ssl/CA/usedCA.pem' >> /etc/imapd.conf");
-    SCR::Execute(.target.bash, "/usr/bin/grep '^tls_ca_path' /etc/imapd.conf || /bin/echo 'tls_ca_path: /usr/ssl/CA' >> /etc/imapd.conf");
     
     //UI(`ProgressMilestoneUI( 90, _("Starting POP3/IMAP subsystem"), 4 ));
 
