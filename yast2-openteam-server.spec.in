@@ -2,7 +2,7 @@
 # neededforbuild yast2-devel-packages
 
 @HEADER@
-Requires:	yast2
+Requires:	yast2 postfix dhcp-server dns_daemon cyrus-imapd cyrus-sasl2 apache samba openldap2 postgresql imapweb32
 
 BuildArchitectures:	noarch
 
