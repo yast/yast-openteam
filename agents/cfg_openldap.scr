@@ -27,5 +27,5 @@
 .sysconfig.openldap
 
 `ag_ini(
-  SysConfigFile("/etc/sysconfig/openldap")
+  `SysConfigFile("/etc/sysconfig/openldap")
 )

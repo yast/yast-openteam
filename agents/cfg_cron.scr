@@ -27,5 +27,5 @@
 .sysconfig.cron
 
 `ag_ini(
-  SysConfigFile("/etc/sysconfig/cron")
+  `SysConfigFile("/etc/sysconfig/cron")
 )
