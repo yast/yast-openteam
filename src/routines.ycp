@@ -342,7 +342,7 @@ password-hash   {crypt}
 #allow           tls_2_anon
 #TLSCertificateFile    /usr/ssl/certs/cert.pem
 #TLSCertificateKeyFile /usr/ssl/certs/skey.pem
-
+#TLSCACertificateFile  /usr/ssl/CA/CAcert.pem
 
 #######################################################################
 # ldbm database definitions
