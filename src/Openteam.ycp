@@ -68,6 +68,7 @@ global define boolean Modified() ``{
  global string namedconf  = "/etc/named.conf";
  global string cyrusconf  = "/etc/cyrus.conf";
  global string imapdconf  = "/etc/imapd.conf";
+ global string sambaconf  = "/etc/samba/smb.conf";
  global string baseldif   = "/var/lib/ldap/base.ldif";
  global string dnsldif    = "/var/lib/ldap/dnszone.ldif";
  global string nameddir   = "/var/named/";
@@ -77,6 +78,7 @@ global define boolean Modified() ``{
  global list localip      = [];
  global string ldapbase   = "";
  global string ldaporg    = "Company Inc.";
+ global string workgroup  = "Workgroup";
  global string domain     = "";
  global string passwd     = "";
  global string lang       = "";
@@ -229,34 +231,60 @@ global define boolean Write() ``{
     /* Xopenteam read dialog caption */
     string caption = _("Saving openteam configuration");
 
-    // TODO FIXME And set the right number of stages
     integer steps = 7;
+    if( Openteam::wantsamba ) {
+	steps = steps + 1;
+    }
 
     integer sl = 500;
     // sleep(sl);
     
-    // TODO FIXME Names of real stages
-    // We do not set help text here, because it was set outside
-    Progress::New(caption, " ", steps, [
-  	        _("Setup nameserver"),
-		_("Setup SMTP service"),
-		_("Setup LDAP directory service"),
-		_("Setup Postgres Database"),
-		_("Setup POP3/IMAP subsystem"),
-		_("Create initial account, group and shared folder"),
-		_("Setup system and finishing installation")
-	], [
-  	        _("Setting up nameserver"),
-		_("Setting up SMTP service"),
-		_("Setting up LDAP directory service"),
-		_("Setting up Postgres Database"),
-		_("Setting up POP3/IMAP subsystem"),
-		_("Creating initial account, group and shared folder"),
-		_("Setting up system and finishing installation"),
-		_("Finished")
-	],
-	""
-    );
+    
+    if( Openteam::wantsamba ) {
+	Progress::New(caption, " ", steps, [
+			  _("Setup nameserver"),
+			  _("Setup SMTP service"),
+			  _("Setup LDAP directory service"),
+			  _("Setup Postgres Database"),
+			  _("Setup POP3/IMAP subsystem"),
+			  _("Create initial account, group and shared folder"),
+			  _("Setup samba server"),
+			  _("Setup system and finishing installation")
+			  ], [
+			      _("Setting up nameserver"),
+			      _("Setting up SMTP service"),
+			      _("Setting up LDAP directory service"),
+			      _("Setting up Postgres Database"),
+			      _("Setting up POP3/IMAP subsystem"),
+			      _("Creating initial account, group and shared folder"),
+			      _("Setting up samba server"),
+			      _("Setting up system and finishing installation"),
+			      _("Finished")
+			      ],
+		      ""
+	    );
+    } else {
+	Progress::New(caption, " ", steps, [
+			  _("Setup nameserver"),
+			  _("Setup SMTP service"),
+			  _("Setup LDAP directory service"),
+			  _("Setup Postgres Database"),
+			  _("Setup POP3/IMAP subsystem"),
+			  _("Create initial account, group and shared folder"),
+			  _("Setup system and finishing installation")
+			  ], [
+			      _("Setting up nameserver"),
+			      _("Setting up SMTP service"),
+			      _("Setting up LDAP directory service"),
+			      _("Setting up Postgres Database"),
+			      _("Setting up POP3/IMAP subsystem"),
+			      _("Creating initial account, group and shared folder"),
+			      _("Setting up system and finishing installation"),
+			      _("Finished")
+			      ],
+		      ""
+	    );
+    }
 
     if(Abort()) return false;
     Progress::NextStage ();
@@ -537,11 +565,12 @@ EOF") != 0) {
     }
 
     if( Openteam::wantsamba ) {
+	if(Abort()) return false;
+	Progress::NextStage ();
 
-	// FIXME: write the function below:
-	//create_sambaconf();
+	create_sambaconf();
 
-	if( SCR::Execute(.target.bash, "/usr/bin/smbpasswd -w '" + passwd + "'") ) {
+	if( SCR::Execute(.target.bash, "/usr/bin/smbpasswd -w '" + passwd + "'") != 0 ) {
 	    // warning dialog message
 	    string msg = UI(_("Unable to write password of rootdn to secrets.tdb!"));
 	    Report::Error(msg);
@@ -559,18 +588,21 @@ objectclass: account
 	}
 	
 	if( SCR::Execute(.target.bash, "echo -en '" + passwd + "\n" + passwd + "\n' " +
-			 "/usr/bin/pdbedit -a -u root -b") ) {
+			 "/usr/bin/pdbedit -a -u root -b") != 0 ) {
 	    // warning dialog message
 	    string msg = UI(_("Unable to add samba user root to the samba LDAP SAM!"));
 	    Report::Error(msg);
 	}
+
+	Runlevel::ServiceAdjust("smb", "enable");
+	SCR::Write(.sysconfig.samba.SAMBA_SAM, "ldap");
+	SCR::Write(.sysconfig.samba, nil);
     }
 
     //UI(`ProgressMilestoneUI( 120, _("Update configuration files"), 6 ));
     if(Abort()) return false;
     Progress::NextStage ();
 
-    // Setup Nameserver if user wants
     Runlevel::ServiceAdjust("named", "enable");
     SCR::Write(.resolver.domain, domain);
     SCR::Write(.resolver.nameserver, [mergestring(localip,".")]);
@@ -610,10 +642,9 @@ objectclass: account
 
     SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_TOMCAT,   "yes");
     SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_SSL,      "yes");
+    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_PERL,     "yes");
+    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_JSERV,    "yes");
     SCR::Write(.sysconfig.apache, nil);
-    
-    SCR::Write(.sysconfig, nil);
-    
     
     if( false ) {
 	Runlevel::RunInitScript("ldap",       "stop");

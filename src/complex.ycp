@@ -64,26 +64,56 @@ global define symbol Setup1Dialog() ``{
 
     term contents =
 	// main dialog: 
-	`HBox(`HWeight(10,`HStretch()),
-	      `HWeight(80,
-		       `Frame(_("Part 1/2"),
-			      `VBox(
-				  `Left(`CheckBox(`id(`samba),  _("Setup a Samba Server"), false)),
-				  `Left(`CheckBox(`id(`dhcp),   _("Setup a DHCP Server"), false)),
-				  `TextEntry(`id(`TE_ldapbase), _("&LDAP BaseDN"),
-					     Openteam::ldapbase),
-				  `Password(`id(`TE_pw1),       _("En&ter Admin Password:"),
-					    Openteam::passwd),
-				  `Password(`id(`TE_pw2),       _("R&etype Password:"),
-					    Openteam::passwd)
-				  )
-			   )
-		  ),
-	      `HWeight(10, `HStretch())
+	`HBox(
+	    `HWeight(10,`HStretch()),
+	    `HWeight(80,
+		     `Frame(_("Part 1/2"),
+			    `HBox(
+				`HSpacing(),
+				`HSpacing(),
+				`HSpacing(),
+				`VBox(
+				    `VSpacing(),
+				    `Frame("",
+					   `VBox(
+					       `Left(`CheckBox(`id(`samba), `opt(`notify),
+							       _("Setup a Samba Server"),
+							       Openteam::wantsamba)),
+					       `TextEntry(`id(`TE_workgroup),
+							  _("Windows Workgroup"),
+							  Openteam::workgroup)
+					       )),
+				    `VSpacing(),
+				    `Frame("",
+					   `VBox(
+					       `Left(`CheckBox(`id(`dhcp),
+							       _("Setup a DHCP Server"), false))
+					       )),
+				    `VSpacing(),
+				    `Frame("",
+					   `VBox(
+					       `TextEntry(`id(`TE_ldapbase), _("&LDAP BaseDN"),
+							  Openteam::ldapbase),
+					       `Password(`id(`TE_pw1),  _("En&ter Admin Password:"),
+							 Openteam::passwd),
+					       `Password(`id(`TE_pw2),  _("R&etype Password:"),
+							 Openteam::passwd)
+					       )),
+				    `VSpacing()
+				    ),
+				`HSpacing(),
+				`HSpacing(),
+				`HSpacing()
+				)
+			 )
+		),
+	    `HWeight(10, `HStretch())
 	    );
     
     Wizard::SetContentsButtons(caption, contents, HELPS["setup1"]:"",
 			       BackButtonLabel(), NextButtonLabel());
+
+    UI::ChangeWidget(`id(`TE_workgroup), `Enabled, Openteam::wantsamba);
 
     any ret = nil;
     while(true) {
@@ -92,6 +122,12 @@ global define symbol Setup1Dialog() ``{
 
 	Openteam::ldapbase = UI(`QueryWidget(`id(`TE_ldapbase), `Value));
 	Openteam::wantsamba = UI(`QueryWidget(`id(`samba), `Value));
+	Openteam::workgroup = UI(`QueryWidget(`id(`TE_workgroup), `Value));
+	if( Openteam::wantsamba ) {
+	    UI::ChangeWidget(`id(`TE_workgroup), `Enabled, true);
+	} else {
+	    UI::ChangeWidget(`id(`TE_workgroup), `Enabled, false);
+	}
 	
 	string pw1 = UI(`QueryWidget(`id(`TE_pw1), `Value));
 	string pw2 = UI(`QueryWidget(`id(`TE_pw2), `Value));

@@ -115,6 +115,72 @@ global define void ProgressNextStage(string title) ``{
 	SCR::Write (.target.string, Openteam::cyrusconf, cf);
     }
     
+    global define normalize(string text) ``{
+	integer i=0;
+	string norm = "";
+	while( i<size(text) ) {
+	    norm = norm + substring(text,i,1);
+	    if( substring(text,i,1) == " " ) {
+		while( substring(text,i+1,1) == " " ) { i = i + 1; }
+	    }
+	    i = i + 1;
+	}
+	return norm;
+    }
+
+    global define create_sambaconf() ``{
+	string cf = SCR::Read(.target.string, Openteam::sambaconf);
+	list cflist = splitstring(cf,"\n");
+	
+	map smbconf = $[];
+	string section = "";
+	foreach(`line, cflist, ``{
+	    if( regexpmatch(line, "^\\[.*" ) ) {
+		section = deletechars(line,"[]");
+		smbconf[section] = $[];
+	    } else {
+		if( section != "" ) {
+		    string key = regexpsub(line,
+					   "^[[:space:]]*([^=]*)[[:space:]]+=[[:space:]]+(.*)",
+					   "\\1");
+		    key = normalize(key);
+		    string val = regexpsub(line,
+					   "^[[:space:]]*([^=]*)[[:space:]]+=[[:space:]]+(.*)",
+					   "\\2");
+		    if( key != nil && val != nil ) {
+			y2milestone("[%1]:<%2> = <%3>",section,key,val);
+			smbconf[section,key] = val;
+		    }
+		}
+	    }
+	});
+
+	smbconf["global","ldap server"] = "localhost";
+	smbconf["global","ldap port"] = "389";
+	smbconf["global","ldap suffix"] = Openteam::ldapbase;
+	smbconf["global","ldap filter"] = "(&(uid=%u)(objectclass=sambaAccount))";
+	smbconf["global","ldap admin dn"] = "uid=cyrus," + Openteam::ldapbase;
+	smbconf["global","ldap ssl"] = "No";
+	smbconf["global","ldap del only sam attr"] = "Yes";
+	smbconf["global","workgroup"] = Openteam::workgroup;
+
+	cf = "[global]\n";
+	foreach(`key, `val, smbconf["global"]:$[], ``{
+	    cf = cf + "   " + key + " = " + val + "\n";
+	});
+	
+	foreach(`sect, `smap, smbconf, ``{
+	    if( sect != "global" ) {
+		cf = cf + "[" + sect + "]\n";
+		foreach(`key, `val, smap, ``{
+		    cf = cf + "   " + key + " = " + val + "\n";
+		});
+	    }
+	});
+
+	SCR::Write (.target.string, Openteam::sambaconf, cf);
+    }
+    
     /*
      * Create Nameserver setup with db files
      * Parameters:
