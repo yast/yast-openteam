@@ -73,7 +73,7 @@ global define void ProgressNextStage(string title) ``{
 	
 	map imapdopts = $[ "tls_cert_file":"/usr/ssl/certs/cert.pem",
 			   "tls_key_file":"/usr/ssl/certs/skey.pem",
-			   "tls_ca_file":"/usr/ssl/CA/CAcert.pem",
+			   "tls_ca_file":"/usr/ssl/CA/usedCA.pem",
 			   "tls_ca_path":"/usr/ssl/CA",
 			   "allowplainwithouttls":"yes",
 			   "normalizeuid":"yes",
@@ -342,7 +342,7 @@ password-hash   {crypt}
 #allow           tls_2_anon
 #TLSCertificateFile    /usr/ssl/certs/cert.pem
 #TLSCertificateKeyFile /usr/ssl/certs/skey.pem
-#TLSCACertificateFile  /usr/ssl/CA/CAcert.pem
+#TLSCACertificateFile  /usr/ssl/CA/usedCA.pem
 
 #######################################################################
 # ldbm database definitions
