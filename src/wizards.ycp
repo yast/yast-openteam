@@ -52,6 +52,8 @@ global define symbol OpenteamSequence() ``{
     term contents = `Label(_("Initializing ..."));
 
     Wizard::CreateDialog();
+    Wizard::SetDesktopIcon("openteam");
+
     Wizard::SetContentsButtons(caption, contents, "",
 	    BackButtonLabel(), NextButtonLabel());
 
@@ -71,6 +73,7 @@ global define symbol OpenteamAutoSequence() ``{
     term contents = `Label(_("Initializing ..."));
 
     Wizard::CreateDialog();
+    Wizard::SetDesktopIcon("openteam");
     Wizard::SetContentsButtons(caption, contents, "",
 	    BackButtonLabel(), NextButtonLabel());
 
