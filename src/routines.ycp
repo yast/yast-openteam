@@ -632,7 +632,7 @@ objectclass: top
 objectclass: dcObject
 objectclass: domain
 ";
-      ldif = ldif + sformat("dc: %1\n\n", select(tmp, 0, ""));
+      ldif = ldif + sformat("dc: %1\n\n", Openteam::fqhnlist[1]:"");
 
       // Admin enty
       // ****  NOTE about SuSEVirtUserObject: ****
