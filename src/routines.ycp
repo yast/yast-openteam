@@ -463,10 +463,10 @@ mode		0600
 
 # Don't put all your energy in a senseless searching
 #
-index           uid,fn,cn,userpassword,memberuid,gidnumber eq
-index           alias,relayClientcert,objectclass,uidnumber eq
-index           mailenabled,relativeDomainName,zoneName eq,pres
-index           vaddress,mail eq,sub,pres
+index           uid,fn,memberuid,gidnumber,alias,relayClientcert eq
+index           objectclass,uidnumber,mailenabled,relativeDomainName eq
+index           zoneName,vaddress,reject eq
+index           cn,sn,givenname eq,sub
 
 # Access controll
 #
