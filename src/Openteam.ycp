@@ -782,6 +782,9 @@ objectclass: account
     SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_JSERV,      "yes");
     SCR::Write(.sysconfig.apache.HTTPD_CONF_INCLUDE_FILES, "/etc/httpd/slots_include.conf");
     SCR::Write(.sysconfig.apache, nil);
+
+    SCR::Write(.sysconfig.openldap.OPENLDAP_GROUP,       "mail");
+    SCR::Write(.sysconfig.openldap, nil);
     
     if( false ) {
 	Runlevel::RunInitScript("ldap",       "stop");
