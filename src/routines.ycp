@@ -56,6 +56,9 @@ global define void ProgressNextStage(string title) ``{
      *
      */
     global define create_cyrusconf() ``{
+
+	// *********************** imapd.conf *********************************
+
 	string cf = SCR::Read(.target.string, Openteam::imapdconf);
 	list cflist = splitstring(cf,"\n");
 	
@@ -76,7 +79,8 @@ global define void ProgressNextStage(string title) ``{
 			   "normalizeuid":"yes",
 			   "lmtpsocket":"/var/spool/postfix/public/lmtp",
 			   "lmtp_overquota_perm_failure":"no",
-			   "sasl_pwcheck_method":"saslauthd"
+			   "sasl_pwcheck_method":"saslauthd",
+			   "sievedir":"/var/lib/sieve"
 	    ];
 	
 	foreach(`key, `val, imapdopts, ``{
@@ -91,6 +95,24 @@ global define void ProgressNextStage(string title) ``{
 	
 	
 	SCR::Write (.target.string, Openteam::imapdconf, cf);
+
+	// *********************** cyrus.conf *********************************
+
+	cf = SCR::Read(.target.string, Openteam::cyrusconf);
+	cflist = splitstring(cf,"\n");
+
+	integer cnt=0;
+	string line = "";
+	while( cnt < size(cflist) ) {
+	    line = cflist[cnt]:"";
+	    if( regexpmatch(line, ".*lmtpunix") ) {
+		cflist[cnt] = "  lmtpunix      cmd=\"lmtpd\" listen=\"/var/spool/postfix/public/lmtp\" prefork=0";
+	    }
+	    cnt = cnt + 1;
+	}
+	cf = mergestring(cflist, "\n");
+	
+	SCR::Write (.target.string, Openteam::cyrusconf, cf);
     }
     
     /*
