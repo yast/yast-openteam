@@ -16,7 +16,7 @@ openldap2
 mod_perl
 postfix
 cyrus-imapd
-dns_daemon
+bind9
 apache
 postgresql
 yast2-ldap-client
