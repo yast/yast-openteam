@@ -23,6 +23,8 @@ import "Runlevel";
 include "openteam/routines.ycp";
 include "network/ip.ycp"; // ip2string
 
+import "PackageCallbacks";
+
 /**
  * Abort function
  * return boolean return true if abort
@@ -621,6 +623,19 @@ EOF") != 0) {
     if( Openteam::wantsamba ) {
 	if(Abort()) return false;
 	Progress::NextStage ();
+	
+	if( ! Pkg::IsProvided("samba") ) {
+	    Pkg::SourceStartCache (true);
+	    Pkg::TargetInit ("/", false);
+	    Pkg::PkgInstall("samba");
+	    Pkg::PkgSolve();
+	    Pkg::PkgCommit(0);
+	}
+
+	SCR::Write(.sysconfig.samba.SAMBA_SAM, "ldap");
+	SCR::Write(.sysconfig.samba, nil);
+
+	SCR::Execute(.target.bash, "/sbin/SuSEconfig -module samba >/dev/tty4 2>&1");
 
 	map globalopts = $[ "ldap server":"localhost",
 			    "ldap port":"389",
@@ -632,7 +647,7 @@ EOF") != 0) {
 			    "workgroup":workgroup ];
 
 	create_sambaconf(globalopts);
-
+	
 	if( SCR::Execute(.target.bash, "/usr/bin/smbpasswd -w '" + passwd + "'") != 0 ) {
 	    // warning dialog message
 	    string msg = UI(_("Unable to write password of rootdn to secrets.tdb!"));
@@ -650,7 +665,7 @@ objectclass: account
 	    Report::Error(msg);
 	}
 	
-	if( SCR::Execute(.target.bash, "echo -en '" + passwd + "\n" + passwd + "\n' " +
+	if( SCR::Execute(.target.bash, "echo -en '" + passwd + "\n" + passwd + "\n' |" +
 			 "/usr/bin/pdbedit -a -u root -b") != 0 ) {
 	    // warning dialog message
 	    string msg = UI(_("Unable to add samba user root to the samba LDAP SAM!"));
@@ -658,13 +673,19 @@ objectclass: account
 	}
 
 	Runlevel::ServiceAdjust("smb", "enable");
-	SCR::Write(.sysconfig.samba.SAMBA_SAM, "ldap");
-	SCR::Write(.sysconfig.samba, nil);
     }
 
     if( Openteam::wantdhcp ) {
 	if(Abort()) return false;
 	Progress::NextStage ();
+
+	if( ! Pkg::IsProvided("dhcp-server") ) {
+	    Pkg::SourceStartCache (true);
+	    Pkg::TargetInit ("/", false);
+	    Pkg::PkgInstall("dhcp-server");
+	    Pkg::PkgSolve();
+	    Pkg::PkgCommit(0);
+	}
 
 	create_dhcpdconf();
 	Runlevel::ServiceAdjust("dhcpd", "enable");
