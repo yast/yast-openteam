@@ -684,6 +684,7 @@ objectclass: account
     Runlevel::ServiceAdjust("tomcat",     "enable");
     Runlevel::ServiceAdjust("drac",       "enable");
     Runlevel::ServiceAdjust("postgresql", "enable");
+    Runlevel::ServiceAdjust("mailgraph",  "enable");
 
     //SCR(`Write(.sysconfig.DELETE_OLD_CORE,       "yes"));
     //SCR(`Write(.sysconfig.MAX_DAYS_FOR_CORE,     "1"));
