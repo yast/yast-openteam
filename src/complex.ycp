@@ -129,12 +129,12 @@ global define symbol Setup1Dialog() ``{
 
 	ret = UI::UserInput();
 
-	Openteam::ldapbase = UI(`QueryWidget(`id(`TE_ldapbase), `Value));
+	Openteam::ldapbase  = UI(`QueryWidget(`id(`TE_ldapbase), `Value));
 	Openteam::wantsamba = UI(`QueryWidget(`id(`samba), `Value));
 	Openteam::workgroup = UI(`QueryWidget(`id(`TE_workgroup), `Value));
-	Openteam::wantdhcp = UI(`QueryWidget(`id(`dhcp), `Value));
-	Openteam::dhcpfrom = UI(`QueryWidget(`id(`TE_dhcpfrom), `Value));
-	Openteam::dhcpto   = UI(`QueryWidget(`id(`TE_dhcpto), `Value));
+	Openteam::wantdhcp  = UI(`QueryWidget(`id(`dhcp), `Value));
+	Openteam::dhcpfrom  = UI(`QueryWidget(`id(`TE_dhcpfrom), `Value));
+	Openteam::dhcpto    = UI(`QueryWidget(`id(`TE_dhcpto), `Value));
 
 	if( Openteam::wantsamba ) {
 	    UI::ChangeWidget(`id(`TE_workgroup), `Enabled, true);
