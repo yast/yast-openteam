@@ -392,7 +392,8 @@ Some Mailclients as Outlook Express won't be able to send mails via SSL!"));
 		  "relay_clientcerts":"ldap:ldaprelcert",
 		  "tls_random_source":"dev:/dev/urandom",
 		  "tls_daemon_random_source":"dev:/dev/urandom",
-		  "message_size_limit":"30000000"
+		  "message_size_limit":"30000000",
+		  "local_destination_concurrency_limit":"10"
 	];
     write_postconf(pfcf);
 
