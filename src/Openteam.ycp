@@ -24,6 +24,7 @@ include "openteam/routines.ycp";
 include "network/ip.ycp"; // ip2string
 
 import "PackageCallbacks";
+include "require.ycp";
 
 /**
  * Abort function
@@ -134,23 +135,26 @@ global define boolean Read() ``{
 
     if( installMissing ) {
 	string sp = SCR::Read(.target.string, "/usr/share/YaST2/data/slots_packages.txt");
-	list neededPackages = splitstring(sp,"\n");
-
-	boolean needInstall = false;
-	foreach(`pkg, neededPackages, ``{
-	    if( ! Pkg::IsProvided(pkg) ) {
-		needInstall = true;
-		Pkg::PkgInstall(pkg);
+	list splist = splitstring(sp,"\n");
+	list neededPackages = [];
+	foreach(`pkg, splist, ``{
+	    if( pkg != "" ) {
+		neededPackages = add(neededPackages, pkg);
 	    }
 	});
-
-	if( needInstall ) {
-	    Pkg::SourceStartCache (true);
-	    Pkg::TargetInit ("/", false);
-	    Pkg::PkgSolve();
-	    Pkg::PkgCommit(0);
-	    SCR::Execute(.target.bash, "/sbin/SuSEconfig >/dev/tty4 2>&1");
-	}
+	
+        if( ! AreAllPackagesInstalled(neededPackages) ) {
+            boolean ok = RequireAndConflictButtons(neededPackages, [],
+						   _("The following packages need to be installed: %1"),
+						   _("Install"),
+						   _("Exit")
+		);
+            if( ! ok ) {
+		string msg = _("Unable to install all required packages");
+		Report::Error(msg);
+                return false;
+            }
+        }
 
 	if(Abort()) return false;
 	Progress::NextStage ();
