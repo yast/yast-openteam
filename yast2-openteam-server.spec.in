@@ -28,5 +28,5 @@ Summary:	Configuration of openteam
 @moduledir@/Openteam.ycp
 @configdir@/openteam.y2cc
 @scrconfdir@/*.scr
-@datadir@/slots_packages.txt
+@ydatadir@/slots_packages.txt
 %doc @docdir@
