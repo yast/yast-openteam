@@ -49,54 +49,48 @@ global define void ProgressNextStage(string title) ``{
 }
 
     /*
-     * Create /etc/cyrus.conf
+     * adapt /etc/cyrus.conf and /etc/imapd.conf
      * Parameters:
      *
      * NONE
      *
      */
     global define create_cyrusconf() ``{
-	string cnf = "
-START {
-  # do not delete these entries!
-  mboxlist      cmd=\"ctl_mboxlist -r\"
-  deliver       cmd=\"ctl_deliver -r\"
-
-  # this is only necessary if using idled for IMAP IDLE
-#  idled                cmd=\"idled\"
-}
-
-# UNIX sockets start with a slash and are put into /var/imap/socket
-SERVICES {
-  # add or remove based on preferences
-  imap          cmd=\"imapd\" listen=\"imap\" prefork=0
-  imaps         cmd=\"imapd -s\" listen=\"imaps\" prefork=0
-  pop3          cmd=\"pop3d\" listen=\"pop3\" prefork=0
-  pop3s         cmd=\"pop3d -s\" listen=\"pop3s\" prefork=0
-  sieve         cmd=\"timsieved\" listen=\"sieve\" prefork=0
-
-  # at least one LMTP is required for delivery
-  lmtpunix      cmd=\"lmtpd\" listen=\"/var/spool/postfix/public/lmtp\" prefork=1
-}
-
-EVENTS {
-  # this is required
-  checkpoint    cmd=\"ctl_mboxlist -c\" period=30
-
-  # this is only necessary if using duplicate delivery suppression
-  delprune      cmd=\"ctl_deliver -E 3\" period=1440
-
-  # Uncomment the next entry, if you want to automatically remove
-  # old messages of EVERY user.
-  # This example calls ipurge every 60 minutes and ipurge will delete
-  # ALL messages older then 30 days.
-  # enter 'man 8 ipurge' for more details
-
-  # cleanup      cmd=\"ipurge -f -d 30\" period=60
-}
-";
-
-	SCR (`Write (.target.string, cyrusconf, cnf));
+	string cf = SCR::Read(.target.string, Openteam::imapdconf);
+	list cflist = splitstring(cf,"\n");
+	
+	map imapcnf = $[];
+	foreach(`line, cflist, ``{
+	    if( regexpmatch(line, ".*:") ) {
+		line = deletechars(line, "#");
+		list keyval = splitstring(line, ":");
+		imapcnf[keyval[0]:""] = keyval[1]:"";
+	    }
+	});
+	
+	map imapdopts = $[ "tls_cert_file":"/usr/ssl/certs/cert.pem",
+			   "tls_key_file":"/usr/ssl/certs/skey.pem",
+			   "tls_ca_file":"/usr/ssl/CA/CAcert.pem",
+			   "tls_ca_path":"/usr/ssl/CA",
+			   "allowplainwithouttls":"yes",
+			   "normalizeuid":"yes",
+			   "lmtpsocket":"/var/spool/postfix/public/lmtp",
+			   "lmtp_overquota_perm_failure":"no",
+			   "sasl_pwcheck_method":"saslauthd"
+	    ];
+	
+	foreach(`key, `val, imapdopts, ``{
+	    imapcnf[key] = val;
+	});
+	
+	cf = "";
+	foreach(`key, `val, imapcnf, ``{
+	    //y2milestone("%1 = %2", key, val);
+	    cf = cf + key + ": " + val + "\n";
+	});
+	
+	
+	SCR::Write (.target.string, Openteam::imapdconf, cf);
     }
     
     /*

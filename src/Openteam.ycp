@@ -67,6 +67,7 @@ global define boolean Modified() ``{
  global string slapdconf  = "/etc/openldap/slapd.conf";
  global string namedconf  = "/etc/named.conf";
  global string cyrusconf  = "/etc/cyrus.conf";
+ global string imapdconf  = "/etc/imapd.conf";
  global string baseldif   = "/var/lib/ldap/base.ldif";
  global string dnsldif    = "/var/lib/ldap/dnszone.ldif";
  global string nameddir   = "/var/named/";
