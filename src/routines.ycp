@@ -437,7 +437,6 @@ pidfile		/var/run/slapd.pid
 argsfile	/var/run/slapd.args
 password-hash   {crypt}
 
-#allow           tls_2_anon
 #TLSCertificateFile    /etc/ssl/certs/cert.pem
 #TLSCertificateKeyFile /etc/ssl/certs/skey.pem
 #TLSCACertificateFile  /etc/ssl/CA/usedCA.pem
