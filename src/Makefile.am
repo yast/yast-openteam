@@ -23,4 +23,6 @@ config_DATA =			\
 module_DATA =			\
 	Openteam.ycp
 
+ydata_DATA = slots_packages.txt
+
 EXTRA_DIST = $(client_DATA) $(ynclude_DATA) $(config_DATA) $(module_DATA)

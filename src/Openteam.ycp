@@ -109,19 +109,52 @@ global define boolean Read() ``{
     integer sl = 500;
     sleep(sl);
 
+    list allsteps = [];
+    list  psteps = [];
+
+    list args = WFM::Args();
+    boolean installMissing = false;
+    if ( size (args) >= 0 && WFM::Args(0) == "installMissingPackages" ) {
+	installMissing = true;
+	allsteps = add(allsteps,_("Install missing software packages"));
+	psteps = add(psteps,_("Installing missing software packages"));
+	steps = steps + 1;
+    }
+    allsteps = add(allsteps,_("Determine hostname and IP address"));
+    psteps = add(psteps,_("Determining hostname and IP address..."));
+    psteps = add(psteps,_("Finished"));
+
+
     // TODO FIXME Names of real stages
     // We do not set help text here, because it was set outside
-    Progress::New( caption, " ", steps, [
-		       _("Determine hostname and IP address")
-		       ], [
-			   _("Determining hostname and IP address..."),
-			   _("Finished")
-			   ],
-		   ""
-	);
-    
+    Progress::New(caption, " ", steps, allsteps, psteps, "");
     
     if(Abort()) return false;
+    Progress::NextStage ();
+
+    if( installMissing ) {
+	string sp = SCR::Read(.target.string, "/usr/share/YaST2/data/slots_packages.txt");
+	list neededPackages = splitstring(sp,"\n");
+
+	boolean needInstall = false;
+	foreach(`pkg, neededPackages, ``{
+	    if( ! Pkg::IsProvided(pkg) ) {
+		needInstall = true;
+		Pkg::PkgInstall(pkg);
+	    }
+	});
+
+	if( needInstall ) {
+	    Pkg::SourceStartCache (true);
+	    Pkg::TargetInit ("/", false);
+	    Pkg::PkgSolve();
+	    Pkg::PkgCommit(0);
+	    SCR::Execute(.target.bash, "/sbin/SuSEconfig >/dev/tty4 2>&1");
+	}
+
+	if(Abort()) return false;
+	Progress::NextStage ();
+    }
 
     map hnout = SCR::Execute(.target.bash_output, "/bin/hostname -f");
     fqhn = deletechars( hnout["stdout"]:"", "\n");
