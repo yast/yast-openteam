@@ -163,6 +163,7 @@ global define boolean Read() ``{
 	Progress::NextStage ();
     }
 
+
     map hnout = SCR::Execute(.target.bash_output, "/bin/hostname -f");
     fqhn = deletechars( hnout["stdout"]:"", "\n");
     y2milestone("HOSTNAME=%1",fqhn);    
@@ -472,7 +473,7 @@ You won't be able to use the restore function of the Expert Postfix Configuratio
     SCR::Write(.etc.nsswitch_conf.group,  "files ldap");
     SCR::Write(.etc.nsswitch_conf, nil);
 	
-    //UI(`ProgressMilestoneUI( 40, _("Starting LDAP directory service"), 2 ));
+    Progress::Title(_("Starting LDAP directory service"));
     
     // start LDAP Server if not running
     if( Runlevel::RunInitScript("ldap", "start") != 0 ) {
@@ -484,7 +485,7 @@ You won't be able to use the restore function of the Expert Postfix Configuratio
     // Lets wait 3 seconds to let the slapd be ready to run
     sleep(3000);
     
-    //UI(`ProgressMilestoneUI( 50, _("Adding base entries to LDAP directory service"), 2 ));
+    Progress::Title(_("Adding base entries to LDAP directory service"));
     
     // adding base ldif
     if( SCR::Execute(.target.bash, "/usr/bin/ldapadd -x -a -D'uid=cyrus," + ldapbase +
@@ -532,7 +533,7 @@ EOF");
 	
 	sleep(200);
 	
-	//UI(`ProgressMilestoneUI( 70, _("Adding postgres user, database and tables"), 3 ));
+	Progress::Title(_("Adding postgres user, database and tables"));
 	
 	if( SCR::Execute(.target.bash,
 			 "/bin/su - postgres -c 'createuser --createdb --no-adduser comfire'") != 0 ) {
@@ -575,7 +576,7 @@ EOF");
 	];
     create_cyrusconf(imapdopts);
     
-    //UI(`ProgressMilestoneUI( 90, _("Starting POP3/IMAP subsystem"), 4 ));
+    Progress::Title(_("Starting POP3/IMAP subsystem"));
 
     // start cyrus-imapd's master if not running
     if( Runlevel::RunInitScript("saslauthd", "start") != 0 ||
@@ -589,7 +590,7 @@ EOF");
     // Lets wait 2 seconds to let the cyrus-imapd be ready to run
     sleep(2000);
 
-    //UI(`ProgressMilestoneUI( 100, _("Adding shared folder to POP3/IMAP subsystem"), 4 ));
+    Progress::Title(_("Adding shared folder to POP3/IMAP subsystem"));
     if(Abort()) return false;
     Progress::NextStage ();
     
@@ -614,7 +615,7 @@ EOF") != 0) {
     // SCR(`Execute(.target.bash, "/bin/echo '" + passwd +
     //	     "' | /usr/sbin/saslpasswd -p cyrus ;/usr/sbin/saslpasswd -d cyrus"));
 
-    //UI(`ProgressMilestoneUI( 110, _("Adding user mailadmin"), 5 ));
+    Progress::Title(_("Adding user mailadmin"));
     
     if( SCR::Execute(.target.bash, "/usr/sbin/add_user_ldap -bDN '" + ldapbase +
 		     "' -al cyrus -ap '" + passwd +
@@ -806,7 +807,7 @@ You won't be able to login!"));
     }
     
     
-    //UI(`ProgressMilestoneUI( 130, _("Running SuSEconfig"), 6 ));
+    Progress::Title(_("Running SuSEconfig"));
     
     SCR::Execute(.target.bash, "/sbin/SuSEconfig >/dev/tty4 2>&1");
     
