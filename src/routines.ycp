@@ -1,0 +1,625 @@
+/**
+ * File:	include/openteam/routines.ycp
+ * Package:	Configuration of openteam
+ * Summary:	Miscelanous functions for configuration of openteam.
+ * Authors:	Carsten Hoeger <choeger@suse.de>
+ *
+ * $Id$
+ */
+
+{
+
+textdomain "openteam";
+
+/* FIXME: Remove this file if you do not need it! */
+
+/**
+ * Abort function
+ * @return blah blah lahjk
+ */
+global define boolean Abort() ``{
+    if(AbortFunction != nil)
+	return eval(AbortFunction) == true;
+    return false;
+}
+
+/**
+ * Check for pending Abort press
+ * @return true if pending abort
+ */
+global define boolean PollAbort() ``{
+    return UI::PollInput() == `abort;
+}
+
+/**
+ * If modified, ask for confirmation
+ * @return true if abort is confirmed
+ */
+global define boolean ReallyAbort() ``{
+    return !Modified() || UI::ReallyAbortPopup(true);
+}
+
+/**
+ * Progress::NextStage and Progress::Title combined into one function
+ * @param title progressbar title
+ */
+global define void ProgressNextStage(string title) ``{
+    Progress::NextStage();
+    Progress::Title(title);
+}
+
+    /*
+     * Create /etc/cyrus.conf
+     * Parameters:
+     *
+     * NONE
+     *
+     */
+    global define create_cyrusconf() ``{
+	string cnf = "
+START {
+  # do not delete these entries!
+  mboxlist      cmd=\"ctl_mboxlist -r\"
+  deliver       cmd=\"ctl_deliver -r\"
+
+  # this is only necessary if using idled for IMAP IDLE
+#  idled                cmd=\"idled\"
+}
+
+# UNIX sockets start with a slash and are put into /var/imap/socket
+SERVICES {
+  # add or remove based on preferences
+  imap          cmd=\"imapd\" listen=\"imap\" prefork=0
+  imaps         cmd=\"imapd -s\" listen=\"imaps\" prefork=0
+  pop3          cmd=\"pop3d\" listen=\"pop3\" prefork=0
+  pop3s         cmd=\"pop3d -s\" listen=\"pop3s\" prefork=0
+  sieve         cmd=\"timsieved\" listen=\"sieve\" prefork=0
+
+  # at least one LMTP is required for delivery
+  lmtpunix      cmd=\"lmtpd\" listen=\"/var/spool/postfix/public/lmtp\" prefork=1
+}
+
+EVENTS {
+  # this is required
+  checkpoint    cmd=\"ctl_mboxlist -c\" period=30
+
+  # this is only necessary if using duplicate delivery suppression
+  delprune      cmd=\"ctl_deliver -E 3\" period=1440
+
+  # Uncomment the next entry, if you want to automatically remove
+  # old messages of EVERY user.
+  # This example calls ipurge every 60 minutes and ipurge will delete
+  # ALL messages older then 30 days.
+  # enter 'man 8 ipurge' for more details
+
+  # cleanup      cmd=\"ipurge -f -d 30\" period=60
+}
+";
+
+	SCR (`Write (.target.string, cyrusconf, cnf));
+    }
+    
+    /*
+     * Create Nameserver setup with db files
+     * Parameters:
+     *
+     * hostname: The FQHN of NS Host
+     * serial:   initial serialnumber of NS (yyyyMMDDRR)
+     * ip:       ip address as list
+     * mask:     netmask as list
+     *
+     */
+    global define create_nssetup(string hostname, string serial, list ip, list mask, string basedn) ``{
+	string ns      = "";
+	string nsldif  = "";
+	string domain  = "";
+	string ipaddr  = mergestring(ip, ".");
+	string revnet = "";
+	string inaddr = "";
+	integer i = 0;
+	integer cnt = 0;
+	list tmp    = [];
+	list tmpdom = splitstring(hostname, ".");
+
+	// Remove Hostpart from fqhn and generate domain
+	while( i < size(tmpdom) ) {
+	    if( i > 0 )
+		tmp = add(tmp, select(tmpdom, i, ""));
+	    i = i + 1;
+	}
+	
+	domain = mergestring(tmp, ".");
+
+	////////////////////////////////////////////////////////////////////////////////
+	// NS Forward mapping
+	////////////////////////////////////////////////////////////////////////////////
+
+	ns = "$TTL 172800\n";
+	ns = ns + sformat("@\tIN\tSOA\t%1. postmaster.%1. (\n", hostname);
+	ns = ns + sformat("\t\t\t%1\t; serial #YYMMDDRevision", serial);
+	ns = ns +
+	    "
+\t\t\t8H\t; refresh every 8 hours
+\t\t\t2H\t; retry every 2 hours
+\t\t\t1W\t; expire after one week
+\t\t\t1D)\t; minimum TTL
+
+";
+	ns = ns + sformat("\tIN\tNS\t%1.\n\n", hostname);
+	ns = ns + sformat("\tIN\tA\t%1\n", ipaddr);
+	ns = ns + sformat("\tIN\tMX 10\t%1.\n\n", hostname);
+	ns = ns + sformat("%1\tIN\tA\t%2\n",
+			  select( splitstring(hostname, "."), 0, ""),
+			  ipaddr);
+	ns = ns + sformat("smtp\tIN\tCNAME\t%1.\n", hostname);
+
+
+	SCR::Write(.target.string, Openteam::nameddir + domain + ".zone", ns);
+
+	////////////////////////////////////////////////////////////////////////////////
+	// NS Reverse mapping
+	////////////////////////////////////////////////////////////////////////////////
+
+        string nmsub = "";
+	// count number of seros in netmask
+	foreach(`nmsub, mask, ``{
+	    if( nmsub == "0" )
+		cnt = cnt + 1;
+	});
+	
+	y2milestone("CNT=%1", cnt);
+
+
+	// create inaddr-arpa address
+	tmp = [];
+	i = 4 - cnt;
+	while( i > 0 ) {
+	    tmp = add(tmp, select(ip, (i - 1), 0 ));
+	    i = i - 1;
+	}
+
+	inaddr = mergestring(tmp, ".") + ".IN-ADDR.ARPA";
+
+	// create relevant parts of reverse Address of own ip
+	tmp = [];
+	i = 0;
+	while( i < cnt ) {
+	    tmp = add(tmp, select(ip, (4 - i - 1), 0 ));
+	    i = i + 1;
+	}
+
+	revnet = mergestring(tmp, ".");
+
+	y2milestone("REVNET=%1", revnet);
+
+	ns = "$TTL 172800\n";
+	ns = ns + sformat("@\tIN\tSOA\t%1. postmaster.%1. (\n", hostname);
+	ns = ns + sformat("\t\t\t%1\t; serial #YYMMDDRevision", serial);
+	ns = ns +
+	    "
+\t\t\t8H\t; refresh every 8 hours
+\t\t\t2H\t; retry every 2 hours
+\t\t\t1W\t; expire after one week
+\t\t\t1D)\t; minimum TTL
+
+";
+	ns = ns + sformat("\tIN\tNS\t%1.\n", hostname);
+	ns = ns + sformat("%1\tIN\tPTR\t%2.\n", revnet, hostname);
+
+	SCR::Write(.target.string, Openteam::nameddir + inaddr + ".zone", ns);
+	
+	
+	////////////////////////////////////////////////////////////////////////////////
+	// named.conf
+	////////////////////////////////////////////////////////////////////////////////
+	
+	
+	SCR::Execute(.target.bash,
+		     "/bin/cat /etc/named.conf.in > /etc/named.conf; " +
+		     "TMPFILE=`/bin/mktemp -q /tmp/y2namedtmp.XXXXXX` || exit 1; " +
+		     "/bin/cat<<EOF > $TMPFILE\n" +
+		     sformat("zone \"%1\" {\n", domain) +
+		     "        type master;\n" +
+		     sformat("        file \"%1.zone\";\n", domain) +
+		     "};\n\n" +
+		     sformat("zone \"%1\" {\n", inaddr) +
+		     "        type master;\n" +
+		     sformat("        file \"%1.zone\";\n", inaddr) +
+		     "};
+EOF
+cat $TMPFILE >> /etc/named.conf; rm -f $TMPFILE");
+	
+	
+	//SCR (`Write (.target.string, namedconf, ns));
+
+	// TOP
+	nsldif = sformat("dn: o=DNS,%1", basedn);
+	nsldif = nsldif + "
+objectClass: top
+objectClass: organization
+o: DNS
+
+";
+
+	// Forward/Reverse Zone
+	nsldif = nsldif + sformat("dn: relativeDomainName=@,o=DNS,%1", basedn);
+	nsldif = nsldif + "
+objectClass: top
+objectClass: dNSZone
+relativeDomainName: @
+";
+	nsldif = nsldif + sformat("zoneName: %1\n", domain);
+	nsldif = nsldif + sformat("zoneName: %1\n", inaddr);
+	nsldif = nsldif + "dNSTTL: 172800\n";
+	nsldif = nsldif + sformat("sOARecord: %1. postmaster.%1. %2 8H 2H 1W 1D\n",
+				  hostname, serial);
+	nsldif = nsldif + sformat("nSRecord: %1.\n", hostname);
+	nsldif = nsldif + sformat("mXRecord: 10 %1.\n", hostname);
+	nsldif = nsldif + sformat("aRecord: %1\n\n", ipaddr);
+
+	// forward host
+	nsldif = nsldif + sformat("dn: relativeDomainName=%1,o=DNS,%2",
+				  select( splitstring(hostname, "."), 0, ""), basedn);
+	nsldif = nsldif + "
+objectClass: top
+objectClass: dNSZone
+";
+	nsldif = nsldif + sformat("relativeDomainName: %1\n",
+				  select( splitstring(hostname, "."), 0, ""));
+	nsldif = nsldif + sformat("zoneName: %1\n", domain);
+	nsldif = nsldif + "dNSTTL: 172800\n";
+	nsldif = nsldif + sformat("aRecord: %1\n\n", ipaddr);
+
+	// reverse host
+	nsldif = nsldif + sformat("dn: relativeDomainName=%1,o=DNS,%2", revnet, basedn);
+	nsldif = nsldif + "
+objectClass: top
+objectClass: dNSZone
+";
+	nsldif = nsldif + sformat("relativeDomainName: %1\n", revnet);
+	nsldif = nsldif + sformat("zoneName: %1\n", inaddr);
+	nsldif = nsldif + "dNSTTL: 172800\n";
+	nsldif = nsldif + sformat("PTRRecord: %1.\n\n", hostname);
+
+	SCR::Write(.target.string, Openteam::dnsldif, nsldif);
+    }
+
+
+    /*
+     * Create sldapd.conf (ldap server configuration)
+     * Parameters:
+     *
+     * basedn: the basedn
+     * passwd: the unencrypted admin password
+     *
+     */
+    global define create_slapdconf(string basedn, string passwd) ``{
+	string ldp = "";
+
+	ldp = "#
+# See slapd.conf(5) for details on configuration options.
+# This file should NOT be world readable.
+#
+include                /etc/openldap/schema/core.schema
+include                /etc/openldap/schema/cosine.schema
+include                /etc/openldap/schema/inetorgperson.schema
+include                /etc/openldap/schema/nis.schema
+include                /etc/openldap/schema/suse-email-server.schema
+include                /etc/openldap/schema/dnszone.schema
+include                /etc/openldap/schema/samba.schema
+
+# Define global ACLs to disable default read access.
+access to * by * read
+
+#
+# Check, if entries will match to db
+#
+schemacheck	on
+
+loglevel	0
+sizelimit	1000
+
+pidfile		/var/run/slapd.pid
+argsfile	/var/run/slapd.args
+password-hash   {crypt}
+
+#allow           tls_2_anon
+#TLSCertificateFile    /usr/ssl/certs/cert.pem
+#TLSCertificateKeyFile /usr/ssl/certs/skey.pem
+
+
+#######################################################################
+# ldbm database definitions
+#######################################################################
+
+# ******************************* System Backend **********************
+database	bdb
+directory	/var/lib/ldap
+lastmod		on
+mode		0600
+
+";
+
+	ldp = ldp + sformat("suffix		%1\n", basedn);
+	ldp = ldp + sformat("rootdn		uid=cyrus,%1\n", basedn);
+	ldp = ldp + sformat("rootpw		{crypt}%1\n", crypt(passwd));
+
+	ldp = ldp + "
+# ******************************* System Backend **********************
+
+#
+# cleartext passwords, especially for the rootdn,
+# should be avoid.  See slapd.conf(5) for details.
+
+# Don't put all your energy in a senseless searching
+#
+index           uid,fn,cn,userpassword,memberuid,gidnumber eq
+index           alias,relayClientcert,objectclass,uidnumber eq
+index           mailenabled,relativeDomainName,zoneName eq,pres
+index           vaddress,mail eq,sub,pres
+
+# Access controll
+#
+
+# Private AddressBook
+";
+	ldp = ldp + sformat("access to dn=\"ou=addr,uid=(.*),%1\"\n", basedn);
+	ldp = ldp + sformat("  by dn=\"uid=$1,%1\" write", basedn);
+	ldp = ldp + "  by * none
+
+# To let PAM authenticate
+access to attr=userpassword
+  by self write
+  by anonymous auth
+  by * none
+
+access to attr=shadowLastChange
+  by self write
+  by * read
+
+# only the Admin is allowed to change the members of the addressadmins group
+";
+
+	ldp = ldp + sformat("access to dn.base=\"cn=AddressAdmins,o=AddressBook,%1\"", basedn);
+	ldp = ldp + "
+  by users read
+  by * none
+	
+# only the members of the AddressAdmins group are allowed to write to the 
+# Public Address Book
+";
+
+	ldp = ldp + sformat("access to dn.subtree=\"o=AddressBook,%1\"\n",basedn);
+	ldp = ldp + sformat("  by group=\"cn=AddressAdmins,o=AddressBook,%1\" write",basedn);
+	ldp = ldp + "
+  by users read
+  by * none
+
+# handle write access to the personal data (system address book) 
+# - first look at the OpenLDAPaci attribute
+# - if that doesn't exist or the user-dn is not in the subject clause,
+#   give write access to the owner of the entry and read acces to anyone else
+access to attr=c,cn,telephoneNumber,facsimileTelephoneNumber,pager,title,givenname,sn,l,description,mail,street,postalCode,st,homePhone,ou,initials,mobile,labeledURI,preferredLanguage,entry
+  by aci write break
+  by self write
+  by * read
+# if the above break statement is reached add read access for everyone
+access to attr=c,cn,telephoneNumber,facsimileTelephoneNumber,pager,title,givenname,sn,l,description,mail,street,postalCode,st,homePhone,ou,initials,mobile,labeledURI,preferredLanguage,entry
+  by * +rsc
+
+access to attr=comFireTaskDays,comFireAppointmentDays
+  by self write
+  by * none
+";
+
+	SCR (`Write (.target.string, slapdconf, ldp));
+    }
+
+    global define write_postconf(map params) ``{
+	foreach(`key, `value, params, ``{
+	    string cmd = sformat("/usr/sbin/postconf -e '%1=%2'", key, value);
+	    if( SCR::Execute(.target.bash, cmd) != 0 ) {
+		y2warning("error writing main.cf");
+	    }
+	});
+    }
+
+    /*
+     * Append LDAP lookup tables to /etc/postfix/main.cf (postfix configuration)
+     * Parameters:
+     *
+     * basedn:   the basedn
+     *
+     */
+    global define append_ldaptables(string basedn) ``{
+	string cf = SCR::Read(.target.string, Openteam::maincf );
+
+	cf = cf + "
+# alias database for SuSE Linux Open Team Server
+ldapaliases_server_host = localhost
+ldapaliases_server_port = 389
+ldapaliases_bind = no
+ldapaliases_timeout = 20
+";
+
+	cf = cf + sformat("ldapaliases_search_base = %1", basedn);
+	cf = cf + "
+ldapaliases_query_filter = (|(alias=%s)(&(fn=%s)(objectclass=SuSEIMAPFolderObject)))
+ldapaliases_result_attribute = uid,mailDeliveryProgram,deliverToUID
+ldapaliases_lookup_wildcards = no
+ldapaliases_scope = one
+
+# virtual user database for SuSE Linux Open Team Server
+ldapvuser_server_host = localhost
+ldapvuser_server_port = 389
+ldapvuser_bind = no
+ldapvuser_timeout = 20
+";
+
+	cf = cf + sformat("ldapvuser_search_base = %1", basedn);
+	cf = cf + "
+ldapvuser_query_filter = (&(objectclass=SuSEVirtUserObject)(vaddress=%s))
+ldapvuser_result_attribute = uid,mailDeliveryProgram
+ldapvuser_lookup_wildcards = no
+ldapvuser_scope = one
+
+# this is used to enable/disable mail reception
+ldapmailenab_server_host = localhost
+ldapmailenab_server_port = 389
+ldapmailenab_bind = no
+ldapmailenab_timeout = 20
+";
+
+	cf = cf + sformat("ldapmailenab_search_base = %1", basedn);
+	cf = cf + "
+ldapmailenab_query_filter = (mail=%s)
+ldapmailenab_result_attribute = mailenabled
+ldapmailenab_lookup_wildcards = no
+ldapmailenab_scope = one
+
+# this is used for client certificate based relaying
+ldaprelcert_server_host = localhost
+ldaprelcert_server_port = 389
+ldaprelcert_bind = no
+ldaprelcert_timeout = 20
+";
+	cf = cf + sformat("ldaprelcert_search_base = %1", basedn);
+	cf = cf + "
+ldaprelcert_query_filter = (relayClientcert=%s)
+ldaprelcert_result_attribute = uid
+ldaprelcert_lookup_wildcards = no
+ldaprelcert_scope = one
+
+# this is used for header rewriting
+ldapcanonical_server_host = localhost
+ldapcanonical_server_port = 389
+ldapcanonical_bind = no
+ldapcanonical_timeout = 20
+";
+	cf = cf + sformat("ldapcanonical_search_base = %1", basedn);
+	cf = cf + "
+ldapcanonical_query_filter = (uid=%s)
+ldapcanonical_result_attribute = mail
+ldapcanonical_lookup_wildcards = no
+ldapcanonical_scope = one
+";
+	SCR::Write(.target.string, Openteam::maincf, cf);
+    }
+
+
+    /*
+     * Generate base ldif for LDAP Server
+     * Parameters:
+     *
+     * basedn:   the basedn
+     * ldaporg:  Name of Organization
+     * hostname: The FQHN of the mailhost
+     * passwd:   the unencrypted password of the administrative account
+     * ccode:    the ISO 3166 country code
+     * lang:     The user language
+     *
+     */
+    global define genldif(string basedn, string ldaporg, string hostname, string passwd, string ccode, string lang) ``{
+      string ldif ="";
+      string domain = "";
+      list tmp = [];
+      list tmpdom = splitstring(hostname, ".");
+      integer i = 0;
+
+      // Remove Hostpart from fqhn and generate domain
+      while( i < size(tmpdom) ) {
+	if( i > 0 )
+	  tmp = add(tmp, select(tmpdom, i, ""));
+	i = i + 1;
+      }
+      
+      domain = mergestring(tmp, ".");
+
+      // TOP DN entry
+      ldif = sformat("dn: %1", basedn);
+      ldif = ldif + "
+objectclass: top
+objectclass: dcObject
+objectclass: domain
+";
+      ldif = ldif + sformat("dc: %1\n\n", select(tmp, 0, ""));
+
+      // Admin enty
+      // ****  NOTE about SuSEVirtUserObject: ****
+      // We need this to enforce slapd to create an index of vaddress.
+      // If we don't do it, a search would be to slow.
+      // We will remove it after creating the base entries with ldapadd in
+      // imap_step2.ycp
+      ldif = ldif + sformat("dn: uid=cyrus,%1",basedn);
+      ldif = ldif + "
+objectclass: top
+objectclass: person
+objectclass: inetOrgPerson
+objectclass: SuSEeMailObject
+objectClass: SuSEPopAccount
+objectClass: SuSEVirtUserObject
+vaddress: info@foo.bar
+mailenabled: OK
+";
+      ldif = ldif + sformat("mailDomain: %1\n", domain);
+      ldif = ldif + sformat("mail: cyrus@%1\n", domain);
+      ldif = ldif + sformat("preferredLanguage: %1\n", lang);
+      ldif = ldif + sformat("c: %1", ccode);
+      ldif = ldif + "
+uid: cyrus
+cn: cyrus
+sn: cyrus
+";
+      ldif = ldif + sformat("o: %1\n", ldaporg);
+      ldif = ldif + sformat("imapServer: %1\n", hostname);
+      ldif = ldif + sformat("smtpServer: %1", hostname);
+      ldif = ldif + "
+imapPort: 143
+sievePort: 2000
+
+";
+
+      // Default primary Group
+      ldif = ldif + sformat("dn: cn=users,%1",basedn);
+      ldif = ldif + "
+objectclass: top
+objectclass: posixGroup
+cn: users
+gidnumber: 100
+userpassword: {crypt}*
+
+";
+
+      // Default Shared Folder
+      ldif = ldif + sformat("dn: fn=users,%1",basedn);
+      ldif = ldif + "
+objectclass: top
+objectclass: SuSEIMAPFolderObject
+fn: users
+mailenabled: REJECT
+
+";
+
+      // Public AddressBook root object
+      ldif = ldif + sformat("dn: o=AddressBook,%1",basedn);
+      ldif = ldif + "
+objectclass: top
+objectclass: organization
+o: AddressBook
+
+";
+
+      // Public AddressBook Admin Group
+      ldif = ldif + sformat("dn: cn=AddressAdmins,o=AddressBook,%1",basedn);
+      ldif = ldif + "
+objectclass: top
+objectclass: groupofNames
+cn: AddressAdmins
+";
+      ldif = ldif + sformat("member: uid=cyrus,%1\n",basedn);
+
+      SCR (`Write (.target.string, baseldif, ldif));
+    }
+
+/* EOF */
+}

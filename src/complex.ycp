@@ -1,0 +1,438 @@
+/**
+ * File:	include/openteam/complex.ycp
+ * Package:	Configuration of openteam
+ * Summary:	Dialogs definitions
+ * Authors:	Carsten Hoeger <choeger@suse.de>
+ *
+ * $Id$
+ */
+
+{
+
+textdomain "openteam";
+
+import "Wizard";
+import "Wizard_hw";
+
+import "Openteam";
+
+include "ui/common_popups.ycp";
+include "ui/common_messages.ycp";
+
+include "openteam/helps.ycp";
+include "openteam/routines.ycp";
+
+/**
+ * Return a modification status
+ * @return true if data was modified
+ */
+global define boolean Modified() ``{
+    return Openteam::Modified();
+}
+
+
+/**
+ * Read settings dialog
+ * @return `abort if aborted and `next otherwise
+ */
+global define symbol ReadDialog() ``{
+    Wizard::RestoreHelp(HELPS["read"]:"");
+    Openteam::AbortFunction = ``{ return PollAbort();};
+    boolean ret = Openteam::Read();
+    return ret ? `next : `abort;
+}
+
+/**
+ * Write settings dialog
+ * @return `abort if aborted and `next otherwise
+ */
+global define symbol WriteDialog() ``{
+    Wizard::RestoreHelp(HELPS["write"]:"");
+    Openteam::AbortFunction = ``{ return PollAbort();};
+    boolean ret = Openteam::Write();
+    return ret ? `next : `abort;
+}
+
+/**
+ * Setup Dialog one
+ * @return dialog result
+ */
+global define symbol Setup1Dialog() ``{
+
+    /* Openteam summary dialog caption */
+    string caption = _("SuSE Linux Open Team Server");
+
+    term contents =
+	// main dialog: 
+	`HBox(`HWeight(10,`HStretch()),
+	      `HWeight(80,
+		       `Frame(_("Part 1/2"),
+			      `VBox(
+				  `Left(`CheckBox(`id(`dns),    _("&Setup a DNS Server"), true)),
+				  `TextEntry(`id(`TE_ldapbase), _("&LDAP BaseDN"),
+					     Openteam::ldapbase),
+				  `Password(`id(`TE_pw1),       _("En&ter Admin Password:"),
+					    Openteam::passwd),
+				  `Password(`id(`TE_pw2),       _("R&etype Password:"),
+					    Openteam::passwd)
+				  )
+			   )
+		  ),
+	      `HWeight(10, `HStretch())
+	    );
+    
+    Wizard::SetContentsButtons(caption, contents, HELPS["setup1"]:"",
+			       BackButtonLabel(), NextButtonLabel());
+
+    any ret = nil;
+    while(true) {
+
+	ret = UI::UserInput();
+
+	Openteam::ldapbase = UI(`QueryWidget(`id(`TE_ldapbase), `Value));
+	
+	string pw1 = UI(`QueryWidget(`id(`TE_pw1), `Value));
+	string pw2 = UI(`QueryWidget(`id(`TE_pw2), `Value));
+
+	/* abort? */
+	if(ret == `abort || ret == `cancel) {
+	    if(ReallyAbort()) break;
+	    else continue;
+	}
+	else if( ret == `back ) {
+	    break;
+	}
+        else if(ret == `next) {
+	    if( size(pw1) < 5 ) {
+		// warning dialog message
+		string msg = UI(_("Please enter a password with at least 5 characters"));
+		Report::Error(msg);
+		continue;
+	    }
+	    if( pw1 != pw2 ) {
+		// warning dialog message
+		string msg = UI(_("Password have to be identical"));
+		Report::Error(msg);
+		continue;
+	    }
+	    Openteam::passwd = pw2;
+
+            break;
+        }
+        else {
+            y2error("unexpected retcode: %1", ret);
+            continue;
+        }
+    }
+
+    return ret;
+}
+
+/**
+ * Setup Dialog two
+ * @return dialog result
+ */
+global define symbol Setup2Dialog() ``{
+
+    /* Openteam summary dialog caption */
+    string caption = _("SuSE Linux Open Team Server");
+
+    term cselect = `SelectionBox(`id(`ccode), _("&Select your Country"),
+				 [
+				     `item(`id("DE"), "GERMANY", true),
+				     `item(`id("AT"), "AUSTRIA"),
+				     `item(`id("CZ"), "CZECH REPUBLIC"),
+				     `item(`id("FR"), "FRANCE"),
+				     `item(`id("IT"), "ITALY"),
+				     `item(`id("ES"), "SPAIN"),
+				     `item(`id("CH"), "SWITZERLAND"),
+				     `item(`id("GB"), "UNITED KINGDOM"),
+				     `item(`id("US"), "UNITED STATES"),
+				     `item(`id("AF"), "AFGHANISTAN"),
+				     `item(`id("AL"), "ALBANIA"),
+				     `item(`id("DZ"), "ALGERIA"),
+				     `item(`id("AS"), "AMERICAN SAMOA"),
+				     `item(`id("AD"), "ANDORRA"),
+				     `item(`id("AO"), "ANGOLA"),
+				     `item(`id("AI"), "ANGUILLA"),
+				     `item(`id("AQ"), "ANTARCTICA"),
+				     `item(`id("AG"), "ANTIGUA AND BARBUDA"),
+				     `item(`id("AR"), "ARGENTINA"),
+				     `item(`id("AM"), "ARMENIA"),
+				     `item(`id("AW"), "ARUBA"),
+				     `item(`id("AU"), "AUSTRALIA"),
+				     `item(`id("AT"), "AUSTRIA"),
+				     `item(`id("AZ"), "AZERBAIJAN"),
+				     `item(`id("BS"), "BAHAMAS"),
+				     `item(`id("BH"), "BAHRAIN"),
+				     `item(`id("BD"), "BANGLADESH"),
+				     `item(`id("BB"), "BARBADOS"),
+				     `item(`id("BY"), "BELARUS"),
+				     `item(`id("BE"), "BELGIUM"),
+				     `item(`id("BZ"), "BELIZE"),
+				     `item(`id("BJ"), "BENIN"),
+				     `item(`id("BM"), "BERMUDA"),
+				     `item(`id("BT"), "BHUTAN"),
+				     `item(`id("BO"), "BOLIVIA"),
+				     `item(`id("BA"), "BOSNIA AND HERZEGOWINA"),
+				     `item(`id("BW"), "BOTSWANA"),
+				     `item(`id("BV"), "BOUVET ISLAND"),
+				     `item(`id("BR"), "BRAZIL"),
+				     `item(`id("IO"), "BRITISH INDIAN OCEAN TERRITORY"),
+				     `item(`id("BN"), "BRUNEI DARUSSALAM"),
+				     `item(`id("BG"), "BULGARIA"),
+				     `item(`id("BF"), "BURKINA FASO"),
+				     `item(`id("BI"), "BURUNDI"),
+				     `item(`id("KH"), "CAMBODIA"),
+				     `item(`id("CM"), "CAMEROON"),
+				     `item(`id("CA"), "CANADA"),
+				     `item(`id("CV"), "CAPE VERDE"),
+				     `item(`id("KY"), "CAYMAN ISLANDS"),
+				     `item(`id("CF"), "CENTRAL AFRICAN REPUBLIC"),
+				     `item(`id("TD"), "CHAD"),
+				     `item(`id("CL"), "CHILE"),
+				     `item(`id("CN"), "CHINA"),
+				     `item(`id("CX"), "CHRISTMAS ISLAND"),
+				     `item(`id("CC"), "COCOS (KEELING) ISLANDS"),
+				     `item(`id("CO"), "COLOMBIA"),
+				     `item(`id("KM"), "COMOROS"),
+				     `item(`id("CG"), "CONGO"),
+				     `item(`id("CK"), "COOK ISLANDS"),
+				     `item(`id("CR"), "COSTA RICA"),
+				     `item(`id("CI"), "COTE D'IVOIRE"),
+				     `item(`id("HR"), "CROATIA (local name: Hrvatska)"),
+				     `item(`id("CU"), "CUBA"),
+				     `item(`id("CY"), "CYPRUS"),
+				     `item(`id("CZ"), "CZECH REPUBLIC"),
+				     `item(`id("DK"), "DENMARK"),
+				     `item(`id("DJ"), "DJIBOUTI"),
+				     `item(`id("DM"), "DOMINICA"),
+				     `item(`id("DO"), "DOMINICAN REPUBLIC"),
+				     `item(`id("TP"), "EAST TIMOR"),
+				     `item(`id("EC"), "ECUADOR"),
+				     `item(`id("EG"), "EGYPT"),
+				     `item(`id("SV"), "EL SALVADOR"),
+				     `item(`id("GQ"), "EQUATORIAL GUINEA"),
+				     `item(`id("ER"), "ERITREA"),
+				     `item(`id("EE"), "ESTONIA"),
+				     `item(`id("ET"), "ETHIOPIA"),
+				     `item(`id("FK"), "FALKLAND ISLANDS (MALVINAS)"),
+				     `item(`id("FO"), "FAROE ISLANDS"),
+				     `item(`id("FJ"), "FIJI"),
+				     `item(`id("FI"), "FINLAND"),
+				     `item(`id("FR"), "FRANCE"),
+				     `item(`id("FX"), "FRANCE, METROPOLITAN"),
+				     `item(`id("GF"), "FRENCH GUIANA"),
+				     `item(`id("PF"), "FRENCH POLYNESIA"),
+				     `item(`id("TF"), "FRENCH SOUTHERN TERRITORIES"),
+				     `item(`id("GA"), "GABON"),
+				     `item(`id("GM"), "GAMBIA"),
+				     `item(`id("GE"), "GEORGIA"),
+				     `item(`id("DE"), "GERMANY"),
+				     `item(`id("GH"), "GHANA"),
+				     `item(`id("GI"), "GIBRALTAR"),
+				     `item(`id("GR"), "GREECE"),
+				     `item(`id("GL"), "GREENLAND"),
+				     `item(`id("GD"), "GRENADA"),
+				     `item(`id("GP"), "GUADELOUPE"),
+				     `item(`id("GU"), "GUAM"),
+				     `item(`id("GT"), "GUATEMALA"),
+				     `item(`id("GN"), "GUINEA"),
+				     `item(`id("GW"), "GUINEA-BISSAU"),
+				     `item(`id("GY"), "GUYANA"),
+				     `item(`id("HT"), "HAITI"),
+				     `item(`id("HM"), "HEARD AND MC DONALD ISLANDS"),
+				     `item(`id("HN"), "HONDURAS"),
+				     `item(`id("HK"), "HONG KONG"),
+				     `item(`id("HU"), "HUNGARY"),
+				     `item(`id("IS"), "ICELAND"),
+				     `item(`id("IN"), "INDIA"),
+				     `item(`id("ID"), "INDONESIA"),
+				     `item(`id("IR"), "IRAN (ISLAMIC REPUBLIC OF)"),
+				     `item(`id("IQ"), "IRAQ"),
+				     `item(`id("IE"), "IRELAND"),
+				     `item(`id("IL"), "ISRAEL"),
+				     `item(`id("IT"), "ITALY"),
+				     `item(`id("JM"), "JAMAICA"),
+				     `item(`id("JP"), "JAPAN"),
+				     `item(`id("JO"), "JORDAN"),
+				     `item(`id("KZ"), "KAZAKHSTAN"),
+				     `item(`id("KE"), "KENYA"),
+				     `item(`id("KI"), "KIRIBATI"),
+				     `item(`id("KP"), "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF"),
+				     `item(`id("KR"), "KOREA, REPUBLIC OF"),
+				     `item(`id("KW"), "KUWAIT"),
+				     `item(`id("KG"), "KYRGYZSTAN"),
+				     `item(`id("LA"), "LAO PEOPLE'S DEMOCRATIC REPUBLIC"),
+				     `item(`id("LV"), "LATVIA"),
+				     `item(`id("LB"), "LEBANON"),
+				     `item(`id("LS"), "LESOTHO"),
+				     `item(`id("LR"), "LIBERIA"),
+				     `item(`id("LY"), "LIBYAN ARAB JAMAHIRIYA"),
+				     `item(`id("LI"), "LIECHTENSTEIN"),
+				     `item(`id("LT"), "LITHUANIA"),
+				     `item(`id("LU"), "LUXEMBOURG"),
+				     `item(`id("MO"), "MACAU"),
+				     `item(`id("MK"), "MACEDONIA, THE FORMER YUGOSLAV REPUBLIC OF"),
+				     `item(`id("MG"), "MADAGASCAR"),
+				     `item(`id("MW"), "MALAWI"),
+				     `item(`id("MY"), "MALAYSIA"),
+				     `item(`id("MV"), "MALDIVES"),
+				     `item(`id("ML"), "MALI"),
+				     `item(`id("MT"), "MALTA"),
+				     `item(`id("MH"), "MARSHALL ISLANDS"),
+				     `item(`id("MQ"), "MARTINIQUE"),
+				     `item(`id("MR"), "MAURITANIA"),
+				     `item(`id("MU"), "MAURITIUS"),
+				     `item(`id("YT"), "MAYOTTE"),
+				     `item(`id("MX"), "MEXICO"),
+				     `item(`id("FM"), "MICRONESIA, FEDERATED STATES OF"),
+				     `item(`id("MD"), "MOLDOVA, REPUBLIC OF"),
+				     `item(`id("MC"), "MONACO"),
+				     `item(`id("MN"), "MONGOLIA"),
+				     `item(`id("MS"), "MONTSERRAT"),
+				     `item(`id("MA"), "MOROCCO"),
+				     `item(`id("MZ"), "MOZAMBIQUE"),
+				     `item(`id("MM"), "MYANMAR"),
+				     `item(`id("NA"), "NAMIBIA"),
+				     `item(`id("NR"), "NAURU"),
+				     `item(`id("NP"), "NEPAL"),
+				     `item(`id("NL"), "NETHERLANDS"),
+				     `item(`id("AN"), "NETHERLANDS ANTILLES"),
+				     `item(`id("NC"), "NEW CALEDONIA"),
+				     `item(`id("NZ"), "NEW ZEALAND"),
+				     `item(`id("NI"), "NICARAGUA"),
+				     `item(`id("NE"), "NIGER"),
+				     `item(`id("NG"), "NIGERIA"),
+				     `item(`id("NU"), "NIUE"),
+				     `item(`id("NF"), "NORFOLK ISLAND"),
+				     `item(`id("MP"), "NORTHERN MARIANA ISLANDS"),
+				     `item(`id("NO"), "NORWAY"),
+				     `item(`id("OM"), "OMAN"),
+				     `item(`id("PK"), "PAKISTAN"),
+				     `item(`id("PW"), "PALAU"),
+				     `item(`id("PA"), "PANAMA"),
+				     `item(`id("PG"), "PAPUA NEW GUINEA"),
+				     `item(`id("PY"), "PARAGUAY"),
+				     `item(`id("PE"), "PERU"),
+				     `item(`id("PH"), "PHILIPPINES"),
+				     `item(`id("PN"), "PITCAIRN"),
+				     `item(`id("PL"), "POLAND"),
+				     `item(`id("PT"), "PORTUGAL"),
+				     `item(`id("PR"), "PUERTO RICO"),
+				     `item(`id("QA"), "QATAR"),
+				     `item(`id("RE"), "REUNION"),
+				     `item(`id("RO"), "ROMANIA"),
+				     `item(`id("RU"), "RUSSIAN FEDERATION"),
+				     `item(`id("RW"), "RWANDA"),
+				     `item(`id("KN"), "SAINT KITTS AND NEVIS"),
+				     `item(`id("LC"), "SAINT LUCIA"),
+				     `item(`id("VC"), "SAINT VINCENT AND THE GRENADINES"),
+				     `item(`id("WS"), "SAMOA"),
+				     `item(`id("SM"), "SAN MARINO"),
+				     `item(`id("ST"), "SAO TOME AND PRINCIPE"),
+				     `item(`id("SA"), "SAUDI ARABIA"),
+				     `item(`id("SN"), "SENEGAL"),
+				     `item(`id("SC"), "SEYCHELLES"),
+				     `item(`id("SL"), "SIERRA LEONE"),
+				     `item(`id("SG"), "SINGAPORE"),
+				     `item(`id("SK"), "SLOVAKIA (Slovak Republic)"),
+				     `item(`id("SI"), "SLOVENIA"),
+				     `item(`id("SB"), "SOLOMON ISLANDS"),
+				     `item(`id("SO"), "SOMALIA"),
+				     `item(`id("ZA"), "SOUTH AFRICA"),
+				     `item(`id("GS"), "SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS"),
+				     `item(`id("ES"), "SPAIN"),
+				     `item(`id("LK"), "SRI LANKA"),
+				     `item(`id("SH"), "ST. HELENA"),
+				     `item(`id("PM"), "ST. PIERRE AND MIQUELON"),
+				     `item(`id("SD"), "SUDAN"),
+				     `item(`id("SR"), "SURINAME"),
+				     `item(`id("SJ"), "SVALBARD AND JAN MAYEN ISLANDS"),
+				     `item(`id("SZ"), "SWAZILAND"),
+				     `item(`id("SE"), "SWEDEN"),
+				     `item(`id("CH"), "SWITZERLAND"),
+				     `item(`id("SY"), "SYRIAN ARAB REPUBLIC"),
+				     `item(`id("TW"), "TAIWAN, PROVINCE OF CHINA"),
+				     `item(`id("TJ"), "TAJIKISTAN"),
+				     `item(`id("TZ"), "TANZANIA, UNITED REPUBLIC OF"),
+				     `item(`id("TH"), "THAILAND"),
+				     `item(`id("TG"), "TOGO"),
+				     `item(`id("TK"), "TOKELAU"),
+				     `item(`id("TO"), "TONGA"),
+				     `item(`id("TT"), "TRINIDAD AND TOBAGO"),
+				     `item(`id("TN"), "TUNISIA"),
+				     `item(`id("TR"), "TURKEY"),
+				     `item(`id("TM"), "TURKMENISTAN"),
+				     `item(`id("TC"), "TURKS AND CAICOS ISLANDS"),
+				     `item(`id("TV"), "TUVALU"),
+				     `item(`id("UG"), "UGANDA"),
+				     `item(`id("UA"), "UKRAINE"),
+				     `item(`id("AE"), "UNITED ARAB EMIRATES"),
+				     `item(`id("GB"), "UNITED KINGDOM"),
+				     `item(`id("US"), "UNITED STATES"),
+				     `item(`id("UM"), "UNITED STATES MINOR OUTLYING ISLANDS"),
+				     `item(`id("UY"), "URUGUAY"),
+				     `item(`id("UZ"), "UZBEKISTAN"),
+				     `item(`id("VU"), "VANUATU"),
+				     `item(`id("VA"), "VATICAN CITY STATE (HOLY SEE)"),
+				     `item(`id("VE"), "VENEZUELA"),
+				     `item(`id("VN"), "VIET NAM"),
+				     `item(`id("VG"), "VIRGIN ISLANDS (BRITISH)"),
+				     `item(`id("VI"), "VIRGIN ISLANDS (U.S.)"),
+				     `item(`id("WF"), "WALLIS AND FUTUNA ISLANDS"),
+				     `item(`id("EH"), "WESTERN SAHARA"),
+				     `item(`id("YE"), "YEMEN"),
+				     `item(`id("YU"), "YUGOSLAVIA"),
+				     `item(`id("ZR"), "ZAIRE"),
+				     `item(`id("ZM"), "ZAMBIA"),
+				     `item(`id("ZW"), "ZIMBABWE")
+				     ] );
+    
+
+    term contents = `HBox(`HWeight(10,`HStretch()),
+			  `HWeight(80,
+				   `Frame(_("Part 2/2"),
+					  `VBox(
+					      `TextEntry(`id(`TE_ldaporg),
+							 _("&Company / Organization"),
+							 Openteam::ldaporg),
+					      cselect
+					      )
+				       )
+			      ),
+			  `HWeight(10, `HStretch())
+	);
+    
+    Wizard::SetContentsButtons(caption, contents, HELPS["setup2"]:"",
+	    BackButtonLabel(), FinishButtonLabel());
+
+
+    any ret = nil;
+    while(true) {
+
+	ret = UI::UserInput();
+
+	Openteam::ldaporg  = UI(`QueryWidget(`id(`TE_ldaporg),  `Value));
+	Openteam::ccode    = UI(`QueryWidget(`id(`ccode), `CurrentItem));
+
+	/* abort? */
+	if(ret == `abort || ret == `cancel) {
+	    if(ReallyAbort()) break;
+	    else continue;
+	}
+        else if(ret == `next || ret == `back) {
+            break;
+        }
+        else {
+            y2error("unexpected retcode: %1", ret);
+            continue;
+        }
+    }
+
+    return ret;
+}
+
+
+/* EOF */
+}

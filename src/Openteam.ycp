@@ -1,0 +1,694 @@
+/**
+ * File:	modules/Openteam.ycp
+ * Package:	Configuration of openteam
+ * Summary:	Data for configuration of openteam, input and output functions.
+ * Authors:	Carsten Hoeger <choeger@suse.de>
+ *
+ * $Id$
+ *
+ * Representation of the configuration of openteam.
+ * Input and output routines.
+ */
+
+{
+
+module "Openteam";
+textdomain "openteam";
+
+import "Progress";
+import "Report";
+import "Summary";
+import "Runlevel";
+
+include "openteam/routines.ycp";
+include "network/ip.ycp"; // ip2string
+
+/**
+ * Abort function
+ * return boolean return true if abort
+ */
+global block AbortFunction = nil;
+
+/**
+ * Data was modified?
+ */
+global boolean modified = false;
+
+global boolean proposal_valid = false;
+global boolean write_only = false;
+
+/**
+ * Data was modified?
+ * @return true if modified
+ */
+global define boolean Modified() ``{
+    y2debug("modified=%1",modified);
+    return modified;
+};
+
+// Settings: Define all variables needed for configuration of openteam
+// TODO FIXME: Define all the variables necessary to hold
+// TODO FIXME: the configuration here (with the appropriate
+// TODO FIXME: description)
+// TODO FIXME: For example:
+//   /**
+//    * List of the configured cards.
+//    */
+//   list cards = [];
+//
+//   /**
+//    * Some additional parameter needed for the configuration.
+//    */
+//   boolean additional_parameter = true;
+
+ global string slemsversion = "4.0";
+ global string maincf     = "/etc/postfix/main.cf";
+ global string ldapconf   = "/etc/openldap/ldap.conf";
+ global string slapdconf  = "/etc/openldap/slapd.conf";
+ global string namedconf  = "/etc/named.conf";
+ global string cyrusconf  = "/etc/cyrus.conf";
+ global string baseldif   = "/var/lib/ldap/base.ldif";
+ global string dnsldif    = "/var/lib/ldap/dnszone.ldif";
+ global string nameddir   = "/var/named/";
+ global string fqhn       = "this.wont.work";
+ global string ipaddr     = "0.8.1.5";
+ global list netmask      = [];
+ global list localip      = [];
+ global string ldapbase   = "";
+ global string ldaporg    = "Company Inc.";
+ global string domain     = "";
+ global string passwd     = "";
+ global string lang       = "";
+ global string ccode      = "";
+ global boolean wantsns   = true;
+ global list fqhnlist     = [];
+
+/**
+ * Read all openteam settings
+ * @return true on success
+ */
+global define boolean Read() ``{
+
+    /* Xopenteam read dialog caption */
+    string caption = _("Initializing SuSE Linux Open Team Server configuration");
+
+    // TODO FIXME Set the right number of stages
+    integer steps = 1;
+
+    integer sl = 500;
+    sleep(sl);
+
+    // TODO FIXME Names of real stages
+    // We do not set help text here, because it was set outside
+    Progress::New( caption, " ", steps, [
+		       _("Determine hostname and IP address")
+		       ], [
+			   _("Determining hostname and IP address..."),
+			   _("Finished")
+			   ],
+		   ""
+	);
+    
+    
+    if(Abort()) return false;
+
+    map hnout = SCR::Execute(.target.bash_output, "/bin/hostname -f");
+    fqhn = deletechars( hnout["stdout"]:"", "\n");
+    y2milestone("HOSTNAME=%1",fqhn);    
+    
+    list ipout = SCR::Read(.run.ifconfig);
+    foreach(`ifmap, ipout, ``{
+	if( ifmap["name"]:"" == "eth0" ) {
+	    integer ifaddr = ifmap["value","inet","addr"]:0;
+	    integer ifnm   = ifmap["value","inet","mask"]:0;
+	    ipaddr = ip2string(ifaddr);
+	    // from integer to string
+	    netmask = splitstring(ip2string(ifnm),".");
+	}
+    });
+    
+    if( netmask == [] || ipaddr == "" ) {
+	// warning dialog message
+	string msg = sformat(UI(_("unable to determine netmask and/or ip address!")));
+	// return `back;
+	Report::Error(msg);
+	return false;
+    }
+
+    y2milestone("IPADDR=%1", ipaddr);
+    y2milestone("NETMASK=%1", netmask);
+    
+    string nmsub = "";
+    integer cnt = 0;
+    integer gcnt = 0;
+    // count number of seros in netmask and parts with bitmasks < 255
+    foreach(`nmsub, netmask, ``{
+	if( nmsub == "0" )
+	    cnt = cnt + 1;
+	if( nmsub < "255" )
+	    gcnt = gcnt + 1;
+    });
+    
+    
+    if( gcnt != cnt ) {
+	// We have a classless network...
+	// modify netmask to match into the next greater CLASS
+	list tmp = [];
+	integer i = 0;
+	while( i < 4 ) {
+	    if( select(netmask,i,"") < "255" ) {
+		tmp = add(tmp, "0");
+	    } else {
+		tmp = add(tmp, "255");
+	    }
+	    i = i + 1;
+	}
+	y2milestone("TMPNM=%1", tmp);
+	// warning dialog message
+	string msg = sformat(UI(_("%1 is neither a CLASS A, B nor C network!
+I will use %2 as netmask")),mergestring(netmask,"."),mergestring(tmp,"."));
+	Report::Message(msg);
+	netmask = tmp;
+    }
+
+    
+    localip = splitstring(ipaddr, ".");
+
+    fqhnlist = splitstring(fqhn, ".");
+    if( size(fqhnlist) <= 2 ) {
+	// warning dialog message
+	string msg = sformat(UI(_("%1 is an invalid hostname, use something like mail.domain.com!")),fqhn);
+	Report::Error(msg);
+	return false;
+    }
+
+    integer i = 0;
+    list dom = [];
+    list tmpdom = splitstring(fqhn, ".");
+    
+    // Remove Hostpart from fqhn and generate basedn
+    while( i < size(tmpdom) ) {
+    	if( i > 0 )
+	    dom = add(dom, select(tmpdom, i, ""));
+	i = i + 1;
+    }
+
+    ldapbase = "dc=" + mergestring(dom, ",dc=");
+    
+    list tmp = [];
+    tmpdom = splitstring(fqhn, ".");
+    i = 0;
+	
+    // Remove Hostpart from fqhn and generate domain
+    while( i < size(tmpdom) ) {
+	if( i > 0 )
+	    tmp = add(tmp, select(tmpdom, i, ""));
+	i = i + 1;
+    }
+    
+    domain = mergestring(tmp, ".");
+
+    Progress::NextStage();
+
+    if(Abort()) return false;
+    ProgressNextStage(_("Finished"));
+    sleep(sl);
+
+    if(Abort()) return false;
+    modified = false;
+    return true;
+}
+
+/**
+ * Write all openteam settings
+ * @return true on success
+ */
+global define boolean Write() ``{
+
+    /* Xopenteam read dialog caption */
+    string caption = _("Saving openteam configuration");
+
+    // TODO FIXME And set the right number of stages
+    integer steps = 7;
+
+    integer sl = 500;
+    // sleep(sl);
+    
+    // TODO FIXME Names of real stages
+    // We do not set help text here, because it was set outside
+    Progress::New(caption, " ", steps, [
+  	        _("Setup nameserver"),
+		_("Setup SMTP service"),
+		_("Setup LDAP directory service"),
+		_("Setup Postgres Database"),
+		_("Setup POP3/IMAP subsystem"),
+		_("Create initial account, group and shared folder"),
+		_("Setup system and finishing installation")
+	], [
+  	        _("Setting up nameserver"),
+		_("Setting up SMTP service"),
+		_("Setting up LDAP directory service"),
+		_("Setting up Postgres Database"),
+		_("Setting up POP3/IMAP subsystem"),
+		_("Creating initial account, group and shared folder"),
+		_("Setting up system and finishing installation"),
+		_("Finished")
+	],
+	""
+    );
+
+    if(Abort()) return false;
+    Progress::NextStage ();
+
+    map languages = ReadY2("language.ycp");
+    lang = UI(`GetLanguage(false));
+    lang = lookup(user_settings, "language", lang);
+    
+    if( size(lang) > 2 )
+	lang=substring(lang, 3, 2);
+    if( lang != "DE" )
+	lang="EN";
+    
+    y2milestone("LANG=%1", lang);
+    y2milestone("CCODE=%1", ccode);
+
+    map dateout = SCR::Execute(.target.bash_output, "/bin/date \"+%Y%m%d00\"");
+    string serial = deletechars( dateout["stdout"]:"", "\n");
+	
+    y2milestone("NS SERIAL=%1", serial);
+	
+    create_nssetup(fqhn, serial, localip, netmask, ldapbase);
+	
+    // UI(`ProgressMilestoneUI( 20, _("Setting up SMTP service"), 1 ));
+    if(Abort()) return false;
+    Progress::NextStage ();
+	
+    // FIXME: Add service smtps to /etc/services
+    if( SCR::Execute(.target.bash, "grep -E '^smtps' /etc/services || /bin/echo -e 'smtps\t\t465/tcp\t\t#for smtp tunnel over SSL' >> /etc/services") != 0 ) {
+	// warning dialog message
+	string msg = UI(_("Unable to add service smtps to /etc/services.\n\
+Some Mailclients as Outlook Express won't be able to send mails via SSL!"));
+	Report::Error(msg);
+    }
+	
+    // Activate smtps in master.cf
+    if( SCR::Execute(.target.bash, "TMPFILE=`/bin/mktemp -q /tmp/y2mastertmp.XXXXXX` || exit 1; /usr/bin/sed 's/^#\\(smtps.*\\)/\\1/' /etc/postfix/master.cf > $TMPFILE; test ! -z $TMPFILE && cp -f $TMPFILE /etc/postfix/master.cf; rm -f $TMPFILE") != 0 ) {
+	// warning dialog message
+	string msg = UI(_("Unable to activate smtps in /etc/postfix/master.cf.\n\
+Some Mailclients as Outlook Express won't be able to send mails via SSL!"));
+	Report::Error(msg);
+    }
+
+    map pfcf = $[ "myhostname":fqhn,
+		  "myorigin":"$mydomain",
+		  "masquerade_domains":"$mydomain",
+		  "masquerade_exceptions":"root",
+		  "inet_interfaces":"all",
+		  "mydestination":"$mydomain, $myhostname, localhost.$mydomain",
+		  "mailbox_transport":"lmtp:unix:public/lmtp",
+		  "smtpd_recipient_restrictions":"ldap:ldapmailenab,permit_tls_clientcerts,permit_sasl_authenticated,permit_mynetworks, check_relay_domains",
+		  "alias_maps":"hash:/etc/aliases,hash:/etc/aliases.d/slots,ldap:ldapaliases",
+		  "alias_database":"hash:/etc/aliases,hash:/etc/aliases.d/slots",
+		  "recipient_delimiter":"+",
+		  "smtpd_tls_received_header":"yes",
+		  "smtpd_tls_ask_ccert":"yes",
+		  "relay_clientcerts":"ldap:ldaprelcert",
+		  "tls_random_source":"dev:/dev/urandom",
+		  "tls_daemon_random_source":"dev:/dev/urandom",
+		  "message_size_limit":"30000000"
+	];
+    write_postconf(pfcf);
+
+    if( SCR::Execute(.target.bash, "grep -E '^(ldapaliases_server_host|ldapvuser_server_host|ldapmailenab_server_host|ldaprelcert_server_host)' /etc/postfix/main.cf") != 0 ) {
+	y2milestone("appending ldap table definition to main.cf");
+	append_ldaptables(ldapbase);
+    }
+
+
+    // Make a backup for the restore function of the expert postfix webfrontend
+    if( SCR::Execute(.target.bash,
+		     "/bin/cp -af /etc/postfix/main.cf /var/adm/backup/main.cf.bak") != 0 ) {
+	// warning dialog message
+	string msg = UI(_("Unable to make a backup of /etc/postfix/main.cf!\n\
+You won't be able to use the restore function of the Expert Postfix Configuration!"));
+	Report::Error(msg);
+    }
+	
+    //UI(`ProgressMilestoneUI( 30, _("Setting up LDAP directory service"), 2 ));
+    if(Abort()) return false;
+    Progress::NextStage ();
+	
+    SCR::Write(.etc.openldap.ldap_conf.host,                "localhost");
+    SCR::Write(.etc.openldap.ldap_conf.base,                ldapbase);
+    SCR::Write(.etc.openldap.ldap_conf.pam_filter,          "mailenabled=OK");
+    SCR::Write(.etc.openldap.ldap_conf.pam_login_attribute, "uid");
+    SCR::Write(.etc.openldap.ldap_conf, nil);
+
+    create_slapdconf(ldapbase, passwd);
+    genldif(ldapbase, ldaporg, fqhn, passwd, ccode, lang);
+
+    SCR::Write(.etc.nsswitch_conf.passwd, "files ldap");
+    SCR::Write(.etc.nsswitch_conf.group,  "files ldap");
+    SCR::Write(.etc.nsswitch_conf, nil);
+	
+    //UI(`ProgressMilestoneUI( 40, _("Starting LDAP directory service"), 2 ));
+    
+    // start LDAP Server if not running
+    if( Runlevel::RunInitScript("ldap", "start") != 0 ) {
+	// warning dialog message
+	string msg = UI(_("starting LDAP server failed, maybe it is already running..."));
+	Report::Error(msg);
+    }
+    
+    // Lets wait 3 seconds to let the slapd be ready to run
+    sleep(3000);
+    
+    //UI(`ProgressMilestoneUI( 50, _("Adding base entries to LDAP directory service"), 2 ));
+    
+    // adding base ldif
+    if( SCR::Execute(.target.bash, "/usr/bin/ldapadd -x -a -D'uid=cyrus," + ldapbase +
+		     "' -w '" + passwd + 
+		     "' -f " + baseldif +
+		     " 2>&1 > /dev/null") != 0) {
+	// warning dialog message
+	string msg = UI(_("Adding base entries to LDAP server failed"));
+	Report::Error(msg);
+    }
+    
+    // adding dnszone ldif
+    if( SCR::Execute(.target.bash, "/usr/bin/ldapadd -x -a -D'uid=cyrus," + ldapbase +
+		     "' -w '" + passwd + 
+		     "' -f " + dnsldif +
+		     " 2>&1 > /dev/null") != 0) {
+	// warning dialog message
+	string msg = UI(_("Adding DNS entries to LDAP server failed"));
+	Report::Error(msg);
+    }
+	
+    // removing SuSEVirtUserObject from cyrus entry, see imap_lib.ycp genldif
+    SCR::Execute(.target.bash,
+		 "/bin/cat<<EOF | /usr/bin/ldapmodify -x -Duid=cyrus," + ldapbase
+		 + " -w '" + passwd + "'\n" +
+		 "dn: uid=cyrus," + ldapbase + "
+delete: objectClass
+objectClass: SuSEVirtUserObject
+-
+delete: vaddress
+-
+EOF");
+    
+    //UI(`ProgressMilestoneUI( 60, _("Starting Postgres database"), 3 ));
+    if(Abort()) return false;
+    Progress::NextStage ();
+
+    if( 0 ) {
+	// start Postgres Server if not running
+	if( Runlevel::RunInitScript("postgresql", "start") != 0 ) {
+	    // warning dialog message
+	    string msg = UI(_("starting Postgres server failed, maybe it is already running..."));
+	    Report::Error(msg);
+	}
+	
+	sleep(200);
+	
+	//UI(`ProgressMilestoneUI( 70, _("Adding postgres user, database and tables"), 3 ));
+	
+	if( SCR::Execute(.target.bash,
+			 "/bin/su - postgres -c 'createuser --createdb --no-adduser comfire'") != 0 ) {
+	    // warning dialog message
+	    string msg = UI(_("Unable to create postgres database user!"));
+	    Report::Error(msg);
+	}
+	
+	if( SCR::Execute(.target.bash,
+			 "/bin/su - postgres -c 'createdb -U comfire comfire'") != 0 ) {
+	    // warning dialog message
+	    string msg = UI(_("Unable to create postgres database!"));
+	    Report::Error(msg);
+	}
+	
+	if( SCR::Execute(.target.bash,
+			 "/usr/bin/psql -U comfire -d comfire -f /usr/lib/YaST2/bin/comfire-init.pgsql") != 0 ) {
+	    // warning dialog message
+	    string msg = UI(_("Unable to create initial postgres tables!"));
+	    Report::Error(msg);
+	}
+    }
+
+    // UI(`ProgressMilestoneUI( 80, _("Setting up POP3/IMAP subsystem"), 4 ));
+    if(Abort()) return false;
+    Progress::NextStage ();
+	
+    // generate new configuration files
+    create_cyrusconf();
+    
+    // FIXME: Add lmtpsocket option to imapd.conf
+    SCR::Execute(.target.bash, "/usr/bin/grep '^lmtpsocket' /etc/imapd.conf || /bin/echo 'lmtpsocket: /var/spool/postfix/public/lmtp' >> /etc/imapd.conf");
+    
+    SCR::Execute(.target.bash, "/usr/bin/grep '^tls_cert_file' /etc/imapd.conf || /bin/echo 'tls_cert_file: /usr/ssl/certs/cert.pem' >> /etc/imapd.conf");
+    SCR::Execute(.target.bash, "/usr/bin/grep '^tls_key_file' /etc/imapd.conf || /bin/echo 'tls_key_file: /usr/ssl/certs/skey.pem' >> /etc/imapd.conf");
+    SCR::Execute(.target.bash, "/usr/bin/grep '^tls_ca_file' /etc/imapd.conf || /bin/echo 'tls_ca_file: /usr/ssl/CA/usedCA.pem' >> /etc/imapd.conf");
+    SCR::Execute(.target.bash, "/usr/bin/grep '^tls_ca_path' /etc/imapd.conf || /bin/echo 'tls_ca_path: /usr/ssl/CA' >> /etc/imapd.conf");
+    
+    //UI(`ProgressMilestoneUI( 90, _("Starting POP3/IMAP subsystem"), 4 ));
+
+    // start cyrus-imapd's master if not running
+    if( Runlevel::RunInitScript("saslauthd", "start") != 0 ||
+	Runlevel::RunInitScript("cyrus", "start") != 0 ) {
+	// warning dialog message
+	string msg = UI(_("starting Cyrus IMAPD failed, maybe it is already running..."));
+	Report::Error(msg);
+    }
+	
+
+    // Lets wait 2 seconds to let the cyrus-imapd be ready to run
+    sleep(2000);
+
+    //UI(`ProgressMilestoneUI( 100, _("Adding shared folder to POP3/IMAP subsystem"), 4 ));
+    if(Abort()) return false;
+    Progress::NextStage ();
+    
+    // adding imap shared folder
+    if( SCR::Execute(.target.bash, "/bin/cat<<EOF | /usr/sbin/imaptalk.pl\n" +
+		     ". login cyrus " + passwd + "\n" +
+		     ". create users
+. setacl users cyrus lrswipcda
+. setacl users group:users lrswipc
+. setacl users anyone \"\"
+. logout
+EOF") != 0) {
+	// warning dialog message
+	string msg = UI(_("Adding IMAP Shared Folder failed"));
+	Report::Error(msg);
+    }
+
+    // Initialize /etc/sasldb
+    // If this is not done, there will be lot's of warnings in logfiles
+    // I realize it with creating and deleting an entry for user cyrus, no idea
+    // how else this could be done
+    // SCR(`Execute(.target.bash, "/bin/echo '" + passwd +
+    //	     "' | /usr/sbin/saslpasswd -p cyrus ;/usr/sbin/saslpasswd -d cyrus"));
+
+    //UI(`ProgressMilestoneUI( 110, _("Adding user mailadmin"), 5 ));
+    
+    if( SCR::Execute(.target.bash, "/usr/sbin/add_user_ldap -bDN '" + ldapbase +
+		     "' -al cyrus -ap '" + passwd +
+		     "' -uid mailadmin -sn mailadmin -up '" + passwd +
+		     "' -mail mailadmin@" + domain + " -o \"" + ldaporg +
+		     "\" -loginshell /bin/false -c " + ccode + " -preferredlanguage " +
+		     lang + " -alias postmaster -writeglobaladdress allowed" ) != 0 ) {
+	// warning dialog message
+	string msg = UI(_("Adding mailadmin to LDAP server failed"));
+	Report::Error(msg);
+    }
+
+    if( 0 ) {
+	if( SCR::Execute(.target.bash, "/usr/sbin/add_user_comfire " +
+			 " -al comfire -ap '' -uid mailadmin -sn mailadmin" +
+			 " -mail mailadmin@" + domain + " -o \"" + ldaporg +
+			 "\" -H localhost -P 5432" ) != 0 ) {
+	    // warning dialog message
+	    string msg = UI(_("Adding user mailadmin to postgres database failed"));
+	    Report::Error(msg);
+	}
+	
+	if( SCR::Execute(.target.bash, "/usr/sbin/add_group_comfire " +
+			 " -al comfire -ap '' -cn users -mUID mailadmin" +
+			 " -H localhost -P 5432" ) != 0 ) {
+	    // warning dialog message
+	    string msg = UI(_("Adding group users to postgres database failed"));
+	    Report::Error(msg);
+	}
+    }
+    
+    if( SCR::Execute(.target.bash, "/usr/sbin/add_user_cyrus -al cyrus -ap '"
+		     + passwd + "' -uid mailadmin -H localhost " +
+		     "-mb INBOX.sent-mail -mb INBOX.trash -mb INBOX.drafts -mb INBOX.spam" ) != 0 ) {
+	// warning dialog message
+	string msg = UI(_("Adding mailadmin to IMAP server failed"));
+	Report::Error(msg);
+    }
+    
+    if( SCR::Execute(.target.bash, "/usr/sbin/gen_bf_key.pl") != 0 ) {
+	// warning dialog message
+	string msg = UI(_("Unable to generate master key for the fetch mail interface"));
+	Report::Error(msg);
+    }
+
+    //UI(`ProgressMilestoneUI( 120, _("Update configuration files"), 6 ));
+    if(Abort()) return false;
+    Progress::NextStage ();
+
+    // Setup Nameserver if user wants
+    if( Openteam::wantsns ) {
+	Runlevel::ServiceAdjust("named", "enable");
+	SCR::Write(.resolver.domain, domain);
+	SCR::Write(.resolver.nameserver, [mergestring(localip,".")]);
+	SCR::Write(.resolver, nil);
+    }
+
+    Runlevel::ServiceAdjust("postfix",    "enable");
+    Runlevel::ServiceAdjust("cyrus",      "enable");
+    Runlevel::ServiceAdjust("saslauthd",  "enable");
+    Runlevel::ServiceAdjust("ldap",       "enable");
+    Runlevel::ServiceAdjust("apache",     "enable");
+    Runlevel::ServiceAdjust("tomcat",     "enable");
+    Runlevel::ServiceAdjust("drac",       "enable");
+    Runlevel::ServiceAdjust("postgresql", "enable");
+
+    //SCR(`Write(.sysconfig.DELETE_OLD_CORE,       "yes"));
+    //SCR(`Write(.sysconfig.MAX_DAYS_FOR_CORE,     "1"));
+    //SCR(`Write(.sysconfig.MAX_DAYS_FOR_LOGFILES, "60"));
+
+    SCR::Write(.sysconfig.security.PERMISSION_SECURITY,  "secure local");
+    SCR::Write(.sysconfig.security, nil);
+
+    SCR::Write(.sysconfig.cron.MAX_DAYS_IN_TMP,          "1");
+    SCR::Write(.sysconfig.cron.OWNER_TO_KEEP_IN_TMP,     "wwwrun root");
+    SCR::Write(.sysconfig.cron, nil);
+
+    SCR::Write(.sysconfig.postgresql.POSTGRES_OPTIONS,   "-i -B 2048 -N 1024");
+    SCR::Write(.sysconfig.postgresql, nil);
+
+    SCR::Write(.sysconfig.displaymanager.KDM_USERS,      "root");
+    SCR::Write(.sysconfig.displaymanager, nil);
+
+    SCR::Write(.sysconfig.suseconfig.BEAUTIFY_ETC_HOSTS, "no");
+    SCR::Write(.sysconfig.suseconfig, nil);
+
+    SCR::Write(.sysconfig.mail.MAIL_CREATE_CONFIG,       "no");
+    SCR::Write(.sysconfig.mail, nil);
+
+    SCR::Write(.sysconfig.apache.HTTPD_SEC_MOD_TOMCAT,   "yes");
+    SCR::Write(.sysconfig.apache, nil);
+    
+    SCR::Write(.sysconfig, nil);
+    
+    
+    Runlevel::RunInitScript("ldap",       "stop");
+    Runlevel::RunInitScript("cyrus",      "stop");
+    Runlevel::RunInitScript("saslauthd",  "stop");
+    Runlevel::RunInitScript("postgresql", "stop");
+    
+    // FIXME: copy httpd.conf.in template
+    if( SCR::Execute(.target.bash,
+		     "/usr/bin/sed 's/www.company.dom/" + fqhn + "/' /etc/httpd/httpd.conf.in > /etc/httpd/httpd.conf") != 0 ) {
+	string msg = UI(_("Unable to install httpd.conf..."));
+	Report::Error(msg);
+    }
+    
+    if( 0 ) {
+	SCR::Execute(.target.bash, "/usr/bin/grep '^wrapper.classpath=/usr/lib/comfire/nastools.jar' /etc/httpd/jserv/jserv.properties || /bin/echo 'wrapper.classpath=/usr/lib/comfire/nastools.jar' >> /etc/httpd/jserv/jserv.properties");
+    }
+
+    // FIXME: make suidperl suid root in permissions.secure
+    if( SCR::Execute(.target.bash, "TMPFILE=`/bin/mktemp -q /tmp/y2imaptmp.XXXXXX` || exit 1; /usr/bin/sed 's/\\(\\/usr\\/bin\\/suidperl[[:space:]]\\+root\\.root[[:space:]]\\+\\).*/\\14755/' /etc/permissions.secure > $TMPFILE; test ! -z $TMPFILE && cp -f $TMPFILE /etc/permissions.secure; rm -f $TMPFILE") != 0 ) {
+	// warning dialog message
+	string msg = UI(_("Unable to make suidperl suid root in /etc/permissions.secure!"));
+	Report::Error(msg);
+    }
+    
+    // Set password of cyrus
+    if (!SCR::Write(.target.passwd.cyrus, crypt(passwd) )) {
+	// Error msg
+	Report::Error(_("\
+The password of user cyrus could not be set!\n\
+You won't be able to login!"));
+    }
+    
+    
+    //UI(`ProgressMilestoneUI( 130, _("Running SuSEconfig"), 6 ));
+    
+    SCR::Execute(.target.bash, "/sbin/SuSEconfig >/dev/tty4 2>&1");
+    
+    // FIXME: copy httpd.conf.SuSEconfig to httpd.conf
+    if( SCR::Execute(.target.bash,
+		     "/bin/cp -f /etc/httpd/httpd.conf.SuSEconfig /etc/httpd/httpd.conf") != 0 ) {
+	string msg = UI(_("Unable to install httpd.conf..."));
+	Report::Error(msg);
+    }
+    
+    // set hostname because apache won't run direct after installation
+    SCR::Execute(.target.bash, "/bin/hostname --file /etc/HOSTNAME");
+    
+    
+    //UI(`ProgressMilestoneUI( 140, _("done"), 6 ));
+    
+    // UI(`CloseDialog());
+    
+    
+    if(Abort()) return false;
+    ProgressNextStage(_("Finished"));
+
+    Report::Message(_("\
+The installation of your SuSE Linux Open Team Server had been successful finished!\n\
+Have a lot of fun!"));
+
+    if(Abort()) return false;
+    return true;
+}
+
+/**
+ * Get all openteam settings from the first parameter
+ * (For use by autoinstallation.)
+ * @param settings The YCP structure to be imported.
+ * @return boolean True on success
+ */
+global define boolean Import (map settings) ``{
+    // TODO FIXME: your code here (fill the above mentioned variables)...
+    sleep(3000);
+    return true;
+}
+
+/**
+ * Dump the openteam settings to a single map
+ * (For use by autoinstallation.)
+ * @return map Dumped settings (later acceptable by Import ())
+ */
+global define map Export () ``{
+    // TODO FIXME: your code here (return the above mentioned variables)...
+    sleep(3000);
+    return $[];
+}
+
+/**
+ * Create a textual summary and a list of unconfigured cards
+ * @param split split configured and unconfigured?
+ * @return summary of the current configuration
+ */
+global define list Summary() ``{
+    // TODO FIXME: your code here...
+    return [ _("Configuration summary ..."), [] ];
+}
+
+/**
+ * Create an overview table with all configured cards
+ * @return table items
+ */
+global define list Overview() ``{
+    // TODO FIXME: your code here...
+    return [];
+}
+
+/* EOF */
+}
