@@ -17,8 +17,8 @@ textdomain "openteam";
 
 import "Progress";
 import "Report";
+import "Service";
 import "Summary";
-import "Runlevel";
 
 include "openteam/routines.ycp";
 include "network/ip.ycp"; // ip2string
@@ -476,7 +476,7 @@ You won't be able to use the restore function of the Expert Postfix Configuratio
     Progress::Title(_("Starting LDAP directory service"));
     
     // start LDAP Server if not running
-    if( Runlevel::RunInitScript("ldap", "start") != 0 ) {
+    if( Service::RunInitScript("ldap", "start") != 0 ) {
 	// warning dialog message
 	string msg = UI(_("starting LDAP server failed, maybe it is already running..."));
 	Report::Error(msg);
@@ -525,7 +525,7 @@ EOF");
 
     if( false ) {
 	// start Postgres Server if not running
-	if( Runlevel::RunInitScript("postgresql", "start") != 0 ) {
+	if( Service::RunInitScript("postgresql", "start") != 0 ) {
 	    // warning dialog message
 	    string msg = UI(_("starting Postgres server failed, maybe it is already running..."));
 	    Report::Error(msg);
@@ -579,8 +579,8 @@ EOF");
     Progress::Title(_("Starting POP3/IMAP subsystem"));
 
     // start cyrus-imapd's master if not running
-    if( Runlevel::RunInitScript("saslauthd", "start") != 0 ||
-	Runlevel::RunInitScript("cyrus", "start") != 0 ) {
+    if( Service::RunInitScript("saslauthd", "start") != 0 ||
+	Service::RunInitScript("cyrus", "start") != 0 ) {
 	// warning dialog message
 	string msg = UI(_("starting Cyrus IMAPD failed, maybe it is already running..."));
 	Report::Error(msg);
@@ -713,7 +713,7 @@ objectclass: account
 	    Report::Error(msg);
 	}
 
-	Runlevel::ServiceAdjust("smb", "enable");
+	Service::Enable("smb");
     }
 
     if( Openteam::wantdhcp ) {
@@ -729,30 +729,30 @@ objectclass: account
 	}
 
 	create_dhcpdconf();
-	Runlevel::ServiceAdjust("dhcpd", "enable");
+	Service::Adjust("dhcpd", "enable");
     }
 
     //UI(`ProgressMilestoneUI( 120, _("Update configuration files"), 6 ));
     if(Abort()) return false;
     Progress::NextStage ();
 
-    Runlevel::ServiceAdjust("named", "enable");
+    Service::Adjust("named", "enable");
     SCR::Write(.resolver.domain, domain);
     SCR::Write(.resolver.nameserver, [mergestring(localip,".")]);
     SCR::Write(.resolver, nil);
 
-    Runlevel::ServiceAdjust("postfix",    "enable");
-    Runlevel::ServiceAdjust("cyrus",      "enable");
-    Runlevel::ServiceAdjust("saslauthd",  "enable");
-    Runlevel::ServiceAdjust("ldap",       "enable");
-    Runlevel::ServiceAdjust("apache",     "enable");
-    Runlevel::ServiceAdjust("tomcat",     "enable");
-    Runlevel::ServiceAdjust("drac",       "enable");
-    Runlevel::ServiceAdjust("postgresql", "enable");
-    Runlevel::ServiceAdjust("mailgraph",  "enable");
-    Runlevel::ServiceAdjust("sessiond",   "enable");
-    Runlevel::ServiceAdjust("suad",       "enable");
-    Runlevel::ServiceAdjust("fetchd",     "enable");
+    Service::Enable("postfix");
+    Service::Enable("cyrus");
+    Service::Enable("saslauthd");
+    Service::Enable("ldap");
+    Service::Enable("apache");
+    Service::Enable("tomcat");
+    Service::Enable("drac");
+    Service::Enable("postgresql");
+    Service::Enable("mailgraph");
+    Service::Enable("sessiond");
+    Service::Enable("suad");
+    Service::Enable("fetchd");
 
     //SCR(`Write(.sysconfig.DELETE_OLD_CORE,       "yes"));
     //SCR(`Write(.sysconfig.MAX_DAYS_FOR_CORE,     "1"));
@@ -786,12 +786,12 @@ objectclass: account
 
     SCR::Write(.sysconfig.openldap.OPENLDAP_GROUP,       "mail");
     SCR::Write(.sysconfig.openldap, nil);
-    
+
     if( false ) {
-	Runlevel::RunInitScript("ldap",       "stop");
-	Runlevel::RunInitScript("cyrus",      "stop");
-	Runlevel::RunInitScript("saslauthd",  "stop");
-	Runlevel::RunInitScript("postgresql", "stop");
+	Service::RunInitScript("ldap",       "stop");
+	Service::RunInitScript("cyrus",      "stop");
+	Service::RunInitScript("saslauthd",  "stop");
+	Service::RunInitScript("postgresql", "stop");
     }
     
     if( false ) {
