@@ -21,3 +21,4 @@ Exec=/sbin/yast2 openteam
 
 Name=Openteam configuration
 GenericName=Configure openteam
+X-KDE-SubstituteUID=true
