@@ -68,7 +68,8 @@ global define symbol Setup1Dialog() ``{
 	      `HWeight(80,
 		       `Frame(_("Part 1/2"),
 			      `VBox(
-				  `Left(`CheckBox(`id(`dns),    _("&Setup a DNS Server"), true)),
+				  `Left(`CheckBox(`id(`samba),  _("Setup a Samba Server"), false)),
+				  `Left(`CheckBox(`id(`dhcp),   _("Setup a DHCP Server"), false)),
 				  `TextEntry(`id(`TE_ldapbase), _("&LDAP BaseDN"),
 					     Openteam::ldapbase),
 				  `Password(`id(`TE_pw1),       _("En&ter Admin Password:"),
@@ -90,6 +91,7 @@ global define symbol Setup1Dialog() ``{
 	ret = UI::UserInput();
 
 	Openteam::ldapbase = UI(`QueryWidget(`id(`TE_ldapbase), `Value));
+	Openteam::wantsamba = UI(`QueryWidget(`id(`samba), `Value));
 	
 	string pw1 = UI(`QueryWidget(`id(`TE_pw1), `Value));
 	string pw2 = UI(`QueryWidget(`id(`TE_pw2), `Value));

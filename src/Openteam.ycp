@@ -81,8 +81,8 @@ global define boolean Modified() ``{
  global string passwd     = "";
  global string lang       = "";
  global string ccode      = "";
- global boolean wantsns   = true;
  global list fqhnlist     = [];
+ global boolean wantsamba = false;
 
 /**
  * Read all openteam settings
@@ -402,7 +402,7 @@ EOF");
     if(Abort()) return false;
     Progress::NextStage ();
 
-    if( 0 ) {
+    if( false ) {
 	// start Postgres Server if not running
 	if( Runlevel::RunInitScript("postgresql", "start") != 0 ) {
 	    // warning dialog message
@@ -503,7 +503,7 @@ EOF") != 0) {
 	Report::Error(msg);
     }
 
-    if( 0 ) {
+    if( false ) {
 	if( SCR::Execute(.target.bash, "/usr/sbin/add_user_comfire " +
 			 " -al comfire -ap '' -uid mailadmin -sn mailadmin" +
 			 " -mail mailadmin@" + domain + " -o \"" + ldaporg +
@@ -536,17 +536,45 @@ EOF") != 0) {
 	Report::Error(msg);
     }
 
+    if( Openteam::wantsamba ) {
+
+	// FIXME: write the function below:
+	//create_sambaconf();
+
+	if( SCR::Execute(.target.bash, "/usr/bin/smbpasswd -w '" + passwd + "'") ) {
+	    // warning dialog message
+	    string msg = UI(_("Unable to write password of rootdn to secrets.tdb!"));
+	    Report::Error(msg);
+	}
+
+	if( SCR::Execute(.target.bash, "cat<<EOF | /usr/bin/ldapadd -x -Duid=cyrus,"+ ldapbase +
+			 " -w '" + passwd + "'
+dn: uid=root,"+ ldapbase + "
+uid: root
+objectclass: account
+") != 0 ) {
+	    // warning dialog message
+	    string msg = UI(_("Unable to add samba user root to the LDAP database!"));
+	    Report::Error(msg);
+	}
+	
+	if( SCR::Execute(.target.bash, "echo -en '" + passwd + "\n" + passwd + "\n' " +
+			 "/usr/bin/pdbedit -a -u root -b") ) {
+	    // warning dialog message
+	    string msg = UI(_("Unable to add samba user root to the samba LDAP SAM!"));
+	    Report::Error(msg);
+	}
+    }
+
     //UI(`ProgressMilestoneUI( 120, _("Update configuration files"), 6 ));
     if(Abort()) return false;
     Progress::NextStage ();
 
     // Setup Nameserver if user wants
-    if( Openteam::wantsns ) {
-	Runlevel::ServiceAdjust("named", "enable");
-	SCR::Write(.resolver.domain, domain);
-	SCR::Write(.resolver.nameserver, [mergestring(localip,".")]);
-	SCR::Write(.resolver, nil);
-    }
+    Runlevel::ServiceAdjust("named", "enable");
+    SCR::Write(.resolver.domain, domain);
+    SCR::Write(.resolver.nameserver, [mergestring(localip,".")]);
+    SCR::Write(.resolver, nil);
 
     Runlevel::ServiceAdjust("postfix",    "enable");
     Runlevel::ServiceAdjust("cyrus",      "enable");
@@ -587,10 +615,12 @@ EOF") != 0) {
     SCR::Write(.sysconfig, nil);
     
     
-    Runlevel::RunInitScript("ldap",       "stop");
-    Runlevel::RunInitScript("cyrus",      "stop");
-    Runlevel::RunInitScript("saslauthd",  "stop");
-    Runlevel::RunInitScript("postgresql", "stop");
+    if( false ) {
+	Runlevel::RunInitScript("ldap",       "stop");
+	Runlevel::RunInitScript("cyrus",      "stop");
+	Runlevel::RunInitScript("saslauthd",  "stop");
+	Runlevel::RunInitScript("postgresql", "stop");
+    }
     
     // FIXME: copy httpd.conf.in template
     if( SCR::Execute(.target.bash,
@@ -599,7 +629,7 @@ EOF") != 0) {
 	Report::Error(msg);
     }
     
-    if( 0 ) {
+    if( false ) {
 	SCR::Execute(.target.bash, "/usr/bin/grep '^wrapper.classpath=/usr/lib/comfire/nastools.jar' /etc/httpd/jserv/jserv.properties || /bin/echo 'wrapper.classpath=/usr/lib/comfire/nastools.jar' >> /etc/httpd/jserv/jserv.properties");
     }
 
