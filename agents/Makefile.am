@@ -4,6 +4,6 @@
 
 agent_SCRIPTS =
 
-scrconf_DATA =
+scrconf_DATA = run_ifconfig.scr
 
 EXTRA_DIST = $(agent_SCRIPTS) $(scrconf_DATA)
