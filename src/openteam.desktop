@@ -16,7 +16,7 @@ X-SuSE-YaST-Geometry=
 X-SuSE-YaST-SortKey=
 X-SuSE-YaST-AutoInstResource=
 
-Icon=openteam
+Icon=yast-openteam
 Exec=/sbin/yast2 openteam 
 
 Name=Openteam configuration
